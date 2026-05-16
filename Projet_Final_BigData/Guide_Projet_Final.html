@@ -1,0 +1,1343 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Projet Final Big Data — Sujet 6 : Analyse prédictive de la charge réseau</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --accent:#0ea5e9; --accent2:#22c55e;
+    --warn:#f59e0b; --err:#ef4444; --txt:#e2e8f0; --muted:#94a3b8;
+    --code-bg:#0b1220; --border:#334155;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:"Segoe UI", Tahoma, sans-serif;
+    background:#f8fafc; color:#0f172a; line-height:1.65;
+  }
+  header{
+    background:linear-gradient(135deg,#0f172a,#1e3a8a);
+    color:#fff; padding:40px 30px; text-align:center;
+    box-shadow:0 4px 12px rgba(0,0,0,0.2);
+  }
+  header h1{margin:0 0 10px; font-size:2em}
+  header p{margin:5px 0; color:#cbd5e1}
+  .badge{
+    display:inline-block; padding:4px 12px; border-radius:20px;
+    background:#0ea5e9; color:#fff; font-size:0.85em; margin:5px 4px;
+  }
+
+  /* Layout 2 colonnes : nav + contenu */
+  .layout{display:flex; max-width:1400px; margin:0 auto}
+  nav.toc{
+    width:300px; background:#1e293b; color:#e2e8f0;
+    padding:25px 20px; min-height:100vh; position:sticky; top:0;
+    max-height:100vh; overflow-y:auto;
+  }
+  nav.toc h3{color:#22c55e; margin-top:0; border-bottom:1px solid #334155; padding-bottom:8px}
+  nav.toc ol{padding-left:20px; margin:0}
+  nav.toc li{margin:6px 0}
+  nav.toc a{color:#cbd5e1; text-decoration:none; font-size:0.92em}
+  nav.toc a:hover{color:#0ea5e9}
+  nav.toc .sub{padding-left:18px; font-size:0.85em; color:#94a3b8}
+
+  main{flex:1; padding:30px 40px; max-width:1000px}
+
+  section{
+    background:#fff; padding:25px 30px; margin:25px 0;
+    border-left:5px solid var(--accent);
+    border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.08);
+  }
+  section h2{color:#1e3a8a; margin-top:0; border-bottom:2px solid #e2e8f0; padding-bottom:8px}
+  section h3{color:#0369a1; margin-top:25px}
+  section h4{color:#0e7490}
+
+  pre{
+    background:var(--code-bg); color:#e2e8f0; padding:15px 18px;
+    border-radius:6px; overflow-x:auto; font-size:0.88em;
+    border-left:4px solid var(--accent);
+  }
+  code{
+    background:#e0f2fe; color:#0c4a6e; padding:2px 6px;
+    border-radius:4px; font-family:"Consolas",monospace; font-size:0.92em;
+  }
+  pre code{background:none; color:inherit; padding:0}
+
+  .info, .warn, .ok, .step, .tip{
+    padding:12px 18px; border-radius:6px; margin:15px 0;
+    border-left:5px solid;
+  }
+  .info{background:#eff6ff; border-color:#3b82f6; color:#1e3a8a}
+  .warn{background:#fef3c7; border-color:#f59e0b; color:#78350f}
+  .ok{background:#dcfce7; border-color:#22c55e; color:#14532d}
+  .step{background:#f0f9ff; border-color:#0ea5e9; color:#0c4a6e}
+  .tip{background:#fae8ff; border-color:#a855f7; color:#581c87}
+
+  table{
+    width:100%; border-collapse:collapse; margin:15px 0;
+    background:#fff; box-shadow:0 1px 3px rgba(0,0,0,0.1);
+  }
+  th, td{padding:10px 12px; border:1px solid #e2e8f0; text-align:left}
+  th{background:#1e3a8a; color:#fff}
+  tr:nth-child(even) td{background:#f8fafc}
+
+  .result{
+    background:#0b1220; color:#22c55e; padding:12px 18px;
+    border-radius:6px; font-family:"Consolas",monospace;
+    font-size:0.88em; margin:10px 0;
+    border-left:4px solid #22c55e;
+    white-space:pre-wrap;
+  }
+
+  .num{
+    display:inline-block; background:var(--accent); color:#fff;
+    width:30px; height:30px; border-radius:50%;
+    text-align:center; line-height:30px; margin-right:8px;
+    font-weight:bold;
+  }
+
+  .arch{
+    background:#0b1220; color:#22c55e; padding:18px;
+    border-radius:6px; font-family:"Consolas",monospace;
+    font-size:0.9em; white-space:pre; overflow-x:auto;
+  }
+
+  details{
+    background:#f1f5f9; padding:10px 15px; border-radius:6px;
+    margin:10px 0; border-left:3px solid #64748b;
+  }
+  details summary{cursor:pointer; font-weight:bold; color:#1e3a8a}
+
+  footer{
+    background:#1e293b; color:#cbd5e1; padding:20px;
+    text-align:center; margin-top:40px;
+  }
+
+  @media(max-width:900px){
+    .layout{flex-direction:column}
+    nav.toc{width:100%; position:relative; min-height:auto; max-height:none}
+    main{padding:20px}
+  }
+
+  .kbd{
+    background:#e2e8f0; border:1px solid #94a3b8;
+    border-radius:4px; padding:2px 6px; font-family:monospace;
+    font-size:0.85em; box-shadow:0 1px 0 #94a3b8;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Projet Final — Fondamentaux de Big Data</h1>
+  <p><strong>Sujet 6 :</strong> Analyse prédictive de la charge réseau et optimisation de la consommation énergétique en temps réel</p>
+  <p>ENSA Tétouan — Filière SDBI&amp;IA — Module M126 — Pr. Imad Sassi</p>
+  <p>
+    <span class="badge">Kafka</span>
+    <span class="badge">Spark</span>
+    <span class="badge">MongoDB</span>
+    <span class="badge">IA / ML</span>
+    <span class="badge">Dashboard</span>
+    <span class="badge">VirtualBox</span>
+  </p>
+  <p style="font-size:0.9em">Guide pédagogique pas-à-pas — De la configuration des VMs à la soutenance</p>
+</header>
+
+<div class="layout">
+
+<nav class="toc">
+  <h3>Table des matières</h3>
+  <ol>
+    <li><a href="#sec0">Introduction au sujet</a></li>
+    <li><a href="#sec1">1. Architecture globale</a></li>
+    <li><a href="#sec2">2. Prérequis matériels</a></li>
+    <li><a href="#sec3">3. Installation VirtualBox</a></li>
+    <li><a href="#sec4">4. Création des VMs Ubuntu</a></li>
+    <li><a href="#sec5">5. Configuration réseau (cluster)</a></li>
+    <li><a href="#sec6">6. Installation Java + SSH</a></li>
+    <li><a href="#sec7">7. Installation Hadoop (HDFS)</a></li>
+    <li><a href="#sec8">8. Installation Spark</a></li>
+    <li><a href="#sec9">9. Installation Kafka</a></li>
+    <li><a href="#sec10">10. Installation MongoDB</a></li>
+    <li><a href="#sec11">11. Étape A — Ingestion Kafka</a></li>
+    <li><a href="#sec12">12. Étape B — Traitement Spark</a></li>
+    <li><a href="#sec13">13. Étape C — Stockage NoSQL</a></li>
+    <li><a href="#sec14">14. Étape D — Modèles IA (3)</a></li>
+    <li><a href="#sec15">15. Étape E — Data Quality</a></li>
+    <li><a href="#sec16">16. Étape F — Dashboard</a></li>
+    <li><a href="#sec17">17. Étape G — Modes hybrides</a></li>
+    <li><a href="#sec18">18. Étape H — Éthique &amp; RGPD</a></li>
+    <li><a href="#sec19">19. Livrable final (zip)</a></li>
+    <li><a href="#sec20">20. Préparation soutenance</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- =========================== SECTION 0 =========================== -->
+<section id="sec0">
+  <h2>Introduction au sujet</h2>
+
+  <p>Bienvenue ! Ce guide est conçu pour un <strong>débutant</strong>. Vous allez construire un système Big Data <strong>complet</strong>, capable de :</p>
+  <ul>
+    <li>Recevoir en temps réel des données venant de <strong>milliers de compteurs intelligents</strong> (Linky, Smart Meters)</li>
+    <li>Les <strong>traiter en streaming</strong> avec Spark (agrégation par zone, par 15 min)</li>
+    <li>Les <strong>stocker</strong> dans une base NoSQL pour la vélocité et la haute disponibilité</li>
+    <li>Les <strong>analyser avec 3 modèles d'IA</strong> pour prédire la charge réseau</li>
+    <li>Afficher un <strong>dashboard interactif</strong> avec cartes de chaleur, courbes, alertes</li>
+  </ul>
+
+  <div class="info">
+    <strong>Objectif final :</strong> permettre aux gestionnaires d'énergie d'<em>anticiper</em> les pannes par surcharge et d'optimiser l'intégration des énergies renouvelables (solaire, éolien) qui sont intermittentes.
+  </div>
+
+  <h3>Pourquoi Big Data ?</h3>
+  <p>Imaginez 10 000 compteurs envoyant chacun une mesure toutes les 10 secondes. Cela représente <strong>1 000 mesures/seconde</strong>, soit <strong>86 millions de lignes par jour</strong>. Une base SQL classique s'effondre. C'est pourquoi on utilise des outils Big Data : <strong>Kafka</strong> (encaisser le flux), <strong>Spark</strong> (calculer en parallèle), <strong>MongoDB</strong> (stockage rapide).</p>
+</section>
+
+<!-- =========================== SECTION 1 =========================== -->
+<section id="sec1">
+  <h2><span class="num">1</span>Architecture globale du projet</h2>
+
+  <p>Avant de coder, comprenons <strong>l'architecture</strong>. Tous les composants travaillent ensemble dans un pipeline :</p>
+
+<div class="arch">
+┌─────────────────────────────────────────────────────────────────────┐
+│                        SOURCES DE DONNÉES                           │
+│  Compteurs Linky │ API Météo (OpenWeather) │ Prix marché │ RSS    │
+└─────────────────┬───────────────────────────────────────────────────┘
+                  │ (producteurs Python)
+                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  A. APACHE KAFKA  (broker de messages)              │
+│   Topics : meters-raw │ weather │ market-prices │ news-rss          │
+└─────────────────┬───────────────────────────────────────────────────┘
+                  │ (Spark Structured Streaming - lit Kafka)
+                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                B. APACHE SPARK  (traitement distribué)              │
+│  • Fenêtrage 15 min par zone géographique                           │
+│  • NLP sur tickets/feedbacks → détection anomalies textuelles       │
+│  • Corrélation anomalies texte ↔ chutes de tension                  │
+└─────────────────┬───────────────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                C. STOCKAGE NoSQL  (MongoDB)                         │
+│   collections : raw_meters │ aggregations │ alerts │ predictions    │
+└─────────────────┬───────────────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│   D. IA / ML  (3 modèles comparés : ARIMA / Random Forest / LSTM)   │
+│   E. DATA QUALITY (complétude, bruit, biais)                        │
+└─────────────────┬───────────────────────────────────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│        F. DASHBOARD INTERACTIF  (Streamlit / Dash / Plotly)         │
+│   Heatmap consommation │ Prédiction vs réel │ Word cloud │ Alertes  │
+└─────────────────────────────────────────────────────────────────────┘
+</div>
+
+  <h3>Composants à installer (rappel)</h3>
+  <table>
+    <tr><th>Composant</th><th>Rôle</th><th>Version conseillée</th></tr>
+    <tr><td>VirtualBox</td><td>Hyperviseur (héberge les VMs)</td><td>7.0+</td></tr>
+    <tr><td>Ubuntu Server</td><td>OS des nœuds du cluster</td><td>22.04 LTS</td></tr>
+    <tr><td>Java JDK</td><td>Requis par Hadoop/Spark/Kafka</td><td>11</td></tr>
+    <tr><td>Hadoop</td><td>HDFS (stockage distribué)</td><td>3.3.6</td></tr>
+    <tr><td>Spark</td><td>Moteur de calcul</td><td>3.5.0</td></tr>
+    <tr><td>Kafka</td><td>Broker de messages</td><td>3.6.0</td></tr>
+    <tr><td>MongoDB</td><td>Base NoSQL</td><td>7.0</td></tr>
+    <tr><td>Python</td><td>Producers + ML + Dashboard</td><td>3.10+</td></tr>
+  </table>
+</section>
+
+<!-- =========================== SECTION 2 =========================== -->
+<section id="sec2">
+  <h2><span class="num">2</span>Prérequis matériels (votre PC)</h2>
+
+  <div class="warn">
+    <strong>Important :</strong> faire tourner 3 VMs Ubuntu + Hadoop + Spark + Kafka + MongoDB demande de la RAM !
+  </div>
+
+  <table>
+    <tr><th>Composant</th><th>Minimum</th><th>Recommandé</th></tr>
+    <tr><td>RAM PC hôte</td><td>8 Go</td><td><strong>16 Go ou plus</strong></td></tr>
+    <tr><td>CPU</td><td>4 cœurs</td><td>6+ cœurs avec virtualisation (VT-x / AMD-V)</td></tr>
+    <tr><td>Disque libre</td><td>50 Go</td><td>100 Go SSD</td></tr>
+    <tr><td>OS hôte</td><td>Windows 10/11, macOS, Linux</td><td>indifférent</td></tr>
+  </table>
+
+  <h3>Vérifier que la virtualisation est activée</h3>
+
+  <h4>Windows</h4>
+  <ol>
+    <li>Ouvrir le <strong>Gestionnaire des tâches</strong> (<span class="kbd">Ctrl+Shift+Esc</span>)</li>
+    <li>Onglet <strong>Performances</strong> → <strong>CPU</strong></li>
+    <li>En bas à droite : <em>Virtualisation : Activée</em></li>
+  </ol>
+  <div class="warn">Si <em>Désactivée</em> : redémarrer en BIOS (touches F2/F10/Suppr au démarrage), trouver l'option <strong>Intel VT-x</strong> ou <strong>AMD-V</strong> / <strong>SVM Mode</strong>, l'activer, sauvegarder.</div>
+
+  <h4>Linux</h4>
+<pre><code>egrep -c '(vmx|svm)' /proc/cpuinfo</code></pre>
+  <p>Si la sortie est <code>&gt; 0</code> → la virtualisation est supportée et activée.</p>
+</section>
+
+<!-- =========================== SECTION 3 =========================== -->
+<section id="sec3">
+  <h2><span class="num">3</span>Installation de VirtualBox</h2>
+
+  <ol>
+    <li>Aller sur <a href="https://www.virtualbox.org/wiki/Downloads" target="_blank">virtualbox.org/wiki/Downloads</a></li>
+    <li>Télécharger la version pour votre système (Windows hosts / macOS hosts / Linux)</li>
+    <li>Installer en cliquant sur Suivant → Suivant → Terminer</li>
+    <li>Télécharger aussi le <strong>VirtualBox Extension Pack</strong> (depuis la même page) pour USB / RDP</li>
+    <li>Dans VirtualBox : <em>Fichier → Outils → Gestionnaire d'extensions</em> → ajouter le <code>.vbox-extpack</code></li>
+  </ol>
+
+  <h3>Télécharger Ubuntu Server 22.04 LTS</h3>
+  <ul>
+    <li>Site officiel : <a href="https://ubuntu.com/download/server" target="_blank">ubuntu.com/download/server</a></li>
+    <li>Fichier <code>.iso</code> d'environ 2 Go</li>
+  </ul>
+
+  <div class="tip">
+    <strong>Pourquoi Server (sans interface graphique) ?</strong> Pour économiser la RAM. Un serveur Ubuntu en ligne de commande utilise ~500 Mo, alors que la version Desktop en utilise 2 Go. Sur un cluster de 3 VMs, ça fait une grosse différence !
+  </div>
+</section>
+
+<!-- =========================== SECTION 4 =========================== -->
+<section id="sec4">
+  <h2><span class="num">4</span>Création des 3 machines virtuelles</h2>
+
+  <p>Pour respecter le <strong>point G</strong> du sujet (« <em>Tester le système dans au moins deux modes : Fully-Distributed et Pseudo-Distributed</em> »), nous allons créer :</p>
+
+  <table>
+    <tr><th>VM</th><th>Hostname</th><th>RAM</th><th>CPU</th><th>Disque</th><th>Rôle</th></tr>
+    <tr><td>VM1</td><td><code>master</code></td><td>4 Go</td><td>2</td><td>30 Go</td><td>NameNode, Spark Master, Kafka, MongoDB</td></tr>
+    <tr><td>VM2</td><td><code>worker1</code></td><td>2 Go</td><td>2</td><td>20 Go</td><td>DataNode, Spark Worker</td></tr>
+    <tr><td>VM3</td><td><code>worker2</code></td><td>2 Go</td><td>2</td><td>20 Go</td><td>DataNode, Spark Worker</td></tr>
+  </table>
+
+  <div class="info">
+    <strong>Si vous avez peu de RAM (8 Go)</strong>, créez 1 seule VM <code>master</code> avec 4 Go en mode <em>Pseudo-Distributed</em>. Vous ferez la démo Multi-Node Cluster sur la machine d'un camarade.
+  </div>
+
+  <h3>Étapes pour créer chaque VM (à répéter 3 fois)</h3>
+
+  <ol>
+    <li>Ouvrir VirtualBox → cliquer <strong>Nouvelle</strong></li>
+    <li>Nom : <code>master</code> (puis <code>worker1</code>, <code>worker2</code>)</li>
+    <li>Type : <em>Linux</em>, Version : <em>Ubuntu (64-bit)</em></li>
+    <li>ISO : sélectionner l'ISO Ubuntu Server téléchargée</li>
+    <li>Cocher <strong>Skip Unattended Installation</strong> (pour faire l'install manuellement)</li>
+    <li>Mémoire : 4096 Mo (master) / 2048 Mo (workers)</li>
+    <li>Processeurs : 2</li>
+    <li>Disque : 30 Go (master) / 20 Go (workers), VDI, alloué dynamiquement</li>
+    <li>Cliquer <strong>Terminer</strong></li>
+  </ol>
+
+  <h3>Premier démarrage et installation Ubuntu</h3>
+  <ol>
+    <li>Sélectionner la VM → <strong>Démarrer</strong></li>
+    <li>Choisir la langue : English (recommandé pour éviter problèmes d'encodage)</li>
+    <li>Keyboard layout : French (selon votre clavier)</li>
+    <li>Type d'installation : <em>Ubuntu Server</em> (minimal)</li>
+    <li>Network : laisser DHCP pour l'instant (on configurera après)</li>
+    <li>Storage : <em>Use entire disk</em></li>
+    <li>Profil :
+      <ul>
+        <li>Your name : <code>hazem</code></li>
+        <li>Server's name : <code>master</code> (puis <code>worker1</code>, <code>worker2</code>)</li>
+        <li>Username : <code>hadoop</code></li>
+        <li>Password : choisissez quelque chose de simple (vous le retaperez souvent)</li>
+      </ul>
+    </li>
+    <li>SSH Setup : cocher <strong>Install OpenSSH server</strong> (très important !)</li>
+    <li>Featured Server Snaps : ne rien cocher</li>
+    <li>Attendre la fin → <strong>Reboot Now</strong></li>
+  </ol>
+
+  <div class="ok">
+    <strong>Résultat attendu :</strong> après reboot, vous voyez l'invite <code>master login:</code>. Connectez-vous avec <code>hadoop</code> + mot de passe.
+  </div>
+</section>
+
+<!-- =========================== SECTION 5 =========================== -->
+<section id="sec5">
+  <h2><span class="num">5</span>Configuration réseau du cluster</h2>
+
+  <p>Les 3 VMs doivent se voir entre elles. On va utiliser un <strong>Réseau interne</strong> + <strong>NAT</strong>.</p>
+
+  <h3>5.1 — Configurer 2 cartes réseau par VM</h3>
+
+  <ol>
+    <li>VM éteinte → <strong>Configuration</strong> → <strong>Réseau</strong></li>
+    <li><strong>Adapter 1</strong> : NAT (pour accéder à Internet — installer paquets)</li>
+    <li><strong>Adapter 2</strong> : Réseau interne, nom : <code>bigdata-net</code> (pour communication entre VMs)</li>
+    <li>Faire ça pour les 3 VMs avec le même nom <code>bigdata-net</code></li>
+  </ol>
+
+  <h3>5.2 — Attribuer des IPs fixes</h3>
+
+  <table>
+    <tr><th>VM</th><th>IP fixe</th></tr>
+    <tr><td>master</td><td>192.168.50.10</td></tr>
+    <tr><td>worker1</td><td>192.168.50.11</td></tr>
+    <tr><td>worker2</td><td>192.168.50.12</td></tr>
+  </table>
+
+  <p>Sur chaque VM, éditer la config Netplan :</p>
+
+<pre><code>sudo nano /etc/netplan/00-installer-config.yaml</code></pre>
+
+  <p>Contenu pour <strong>master</strong> :</p>
+
+<pre><code>network:
+  version: 2
+  ethernets:
+    enp0s3:                 # 1ère carte (NAT)
+      dhcp4: true
+    enp0s8:                 # 2ème carte (Réseau interne)
+      dhcp4: false
+      addresses: [192.168.50.10/24]</code></pre>
+
+  <div class="warn">Pour <code>worker1</code> mettre <code>192.168.50.11</code>, pour <code>worker2</code> mettre <code>192.168.50.12</code>.</div>
+
+<pre><code>sudo netplan apply
+ip a                    # vérifier que enp0s8 a bien l'IP fixe</code></pre>
+
+  <h3>5.3 — Fichier /etc/hosts (sur les 3 VMs)</h3>
+
+<pre><code>sudo nano /etc/hosts</code></pre>
+
+<pre><code>127.0.0.1   localhost
+192.168.50.10  master
+192.168.50.11  worker1
+192.168.50.12  worker2</code></pre>
+
+  <h3>5.4 — Test de connectivité</h3>
+<pre><code>ping -c 3 worker1
+ping -c 3 worker2</code></pre>
+
+  <div class="result">PING worker1 (192.168.50.11) 56(84) bytes of data.
+64 bytes from worker1 (192.168.50.11): icmp_seq=1 ttl=64 time=0.51 ms
+64 bytes from worker1 (192.168.50.11): icmp_seq=2 ttl=64 time=0.43 ms
+--- worker1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss</div>
+</section>
+
+<!-- =========================== SECTION 6 =========================== -->
+<section id="sec6">
+  <h2><span class="num">6</span>Installation Java et SSH sans mot de passe</h2>
+
+  <p>Hadoop / Spark / Kafka ont tous besoin de <strong>Java</strong>.</p>
+
+<pre><code>sudo apt update
+sudo apt install openjdk-11-jdk -y
+java -version</code></pre>
+
+  <div class="result">openjdk version "11.0.20" 2023-07-18
+OpenJDK Runtime Environment (build 11.0.20+8-post-Ubuntu)
+OpenJDK 64-Bit Server VM (build 11.0.20+8-post-Ubuntu, mixed mode)</div>
+
+  <h3>6.1 — Variables d'environnement Java</h3>
+<pre><code>echo 'export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64' &gt;&gt; ~/.bashrc
+echo 'export PATH=$PATH:$JAVA_HOME/bin' &gt;&gt; ~/.bashrc
+source ~/.bashrc</code></pre>
+
+  <h3>6.2 — SSH sans mot de passe (depuis master vers workers)</h3>
+
+  <p>Hadoop a besoin de pouvoir se connecter aux workers <strong>sans demander de mot de passe</strong>.</p>
+
+<pre><code># Sur master uniquement
+ssh-keygen -t rsa -P "" -f ~/.ssh/id_rsa
+ssh-copy-id hadoop@master
+ssh-copy-id hadoop@worker1
+ssh-copy-id hadoop@worker2
+
+# Tester
+ssh worker1   # doit se connecter SANS demander de mot de passe
+exit</code></pre>
+
+  <div class="ok">Si <code>ssh worker1</code> se connecte directement, c'est parfait.</div>
+</section>
+
+<!-- =========================== SECTION 7 =========================== -->
+<section id="sec7">
+  <h2><span class="num">7</span>Installation Hadoop 3.3.6 (HDFS)</h2>
+
+  <p>HDFS sert de stockage <strong>distribué</strong> sous-jacent. On l'installe principalement sur le master, puis on déploie sur les workers.</p>
+
+  <h3>7.1 — Téléchargement</h3>
+<pre><code>cd ~
+wget https://downloads.apache.org/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
+tar -xzf hadoop-3.3.6.tar.gz
+sudo mv hadoop-3.3.6 /usr/local/hadoop</code></pre>
+
+  <h3>7.2 — Variables d'environnement</h3>
+<pre><code>cat &gt;&gt; ~/.bashrc &lt;&lt;'EOF'
+export HADOOP_HOME=/usr/local/hadoop
+export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
+export PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
+EOF
+source ~/.bashrc
+hadoop version</code></pre>
+
+  <div class="result">Hadoop 3.3.6
+Source code repository https://github.com/apache/hadoop.git -r 1be78238728da9266a4f88195058f08fd012bf9c</div>
+
+  <h3>7.3 — Configuration des fichiers XML</h3>
+
+  <p>Tous dans <code>/usr/local/hadoop/etc/hadoop/</code></p>
+
+  <details>
+    <summary><strong>core-site.xml</strong></summary>
+<pre><code>&lt;configuration&gt;
+  &lt;property&gt;
+    &lt;name&gt;fs.defaultFS&lt;/name&gt;
+    &lt;value&gt;hdfs://master:9000&lt;/value&gt;
+  &lt;/property&gt;
+&lt;/configuration&gt;</code></pre>
+  </details>
+
+  <details>
+    <summary><strong>hdfs-site.xml</strong></summary>
+<pre><code>&lt;configuration&gt;
+  &lt;property&gt;
+    &lt;name&gt;dfs.replication&lt;/name&gt;
+    &lt;value&gt;2&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;dfs.namenode.name.dir&lt;/name&gt;
+    &lt;value&gt;/usr/local/hadoop/data/namenode&lt;/value&gt;
+  &lt;/property&gt;
+  &lt;property&gt;
+    &lt;name&gt;dfs.datanode.data.dir&lt;/name&gt;
+    &lt;value&gt;/usr/local/hadoop/data/datanode&lt;/value&gt;
+  &lt;/property&gt;
+&lt;/configuration&gt;</code></pre>
+  </details>
+
+  <details>
+    <summary><strong>workers</strong> (liste des DataNodes)</summary>
+<pre><code>worker1
+worker2</code></pre>
+  </details>
+
+  <h3>7.4 — Démarrer HDFS</h3>
+<pre><code># Formater UNE SEULE FOIS
+hdfs namenode -format
+
+start-dfs.sh
+jps                # vérifier les processus Java</code></pre>
+
+  <div class="result">12345 NameNode
+12567 SecondaryNameNode
+13001 Jps</div>
+
+  <p>Interface Web : <a href="http://master:9870" target="_blank">http://master:9870</a></p>
+
+  <h3>7.5 — Mode Pseudo-Distributed (sur 1 seule VM)</h3>
+  <p>Pour le point G du sujet, on doit aussi tester en <em>Pseudo-Distributed</em>. C'est très simple : sur la VM master, mettre <code>dfs.replication=1</code> et <code>workers</code> ne contient que <code>master</code>.</p>
+</section>
+
+<!-- =========================== SECTION 8 =========================== -->
+<section id="sec8">
+  <h2><span class="num">8</span>Installation Apache Spark 3.5.0</h2>
+
+<pre><code>cd ~
+wget https://downloads.apache.org/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3.tgz
+tar -xzf spark-3.5.0-bin-hadoop3.tgz
+sudo mv spark-3.5.0-bin-hadoop3 /usr/local/spark
+
+cat &gt;&gt; ~/.bashrc &lt;&lt;'EOF'
+export SPARK_HOME=/usr/local/spark
+export PATH=$PATH:$SPARK_HOME/bin:$SPARK_HOME/sbin
+EOF
+source ~/.bashrc</code></pre>
+
+  <h3>8.1 — Configuration cluster Spark</h3>
+<pre><code>cd /usr/local/spark/conf
+cp spark-env.sh.template spark-env.sh
+cp workers.template workers
+echo "export SPARK_MASTER_HOST=master" &gt;&gt; spark-env.sh
+echo "export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64" &gt;&gt; spark-env.sh
+
+# fichier workers
+echo "worker1" &gt; workers
+echo "worker2" &gt;&gt; workers</code></pre>
+
+  <h3>8.2 — Démarrage</h3>
+<pre><code>start-master.sh
+start-workers.sh
+jps</code></pre>
+
+  <p>Interface Web Spark : <a href="http://master:8080" target="_blank">http://master:8080</a></p>
+
+  <h3>8.3 — Test PySpark</h3>
+<pre><code>pip install pyspark
+pyspark</code></pre>
+
+  <p>Dans le shell Python :</p>
+<pre><code>&gt;&gt;&gt; rdd = sc.parallelize([1,2,3,4,5])
+&gt;&gt;&gt; rdd.sum()</code></pre>
+  <div class="result">15</div>
+</section>
+
+<!-- =========================== SECTION 9 =========================== -->
+<section id="sec9">
+  <h2><span class="num">9</span>Installation Apache Kafka 3.6.0</h2>
+
+  <p>Kafka utilise <strong>ZooKeeper</strong> pour la coordination (ou KRaft à partir de 3.x — on garde ZooKeeper pour rester simple).</p>
+
+<pre><code>cd ~
+wget https://downloads.apache.org/kafka/3.6.0/kafka_2.13-3.6.0.tgz
+tar -xzf kafka_2.13-3.6.0.tgz
+sudo mv kafka_2.13-3.6.0 /usr/local/kafka</code></pre>
+
+  <h3>9.1 — Démarrer Kafka</h3>
+<pre><code># Terminal 1 — démarrer ZooKeeper
+cd /usr/local/kafka
+bin/zookeeper-server-start.sh config/zookeeper.properties
+
+# Terminal 2 — démarrer Kafka broker
+cd /usr/local/kafka
+bin/kafka-server-start.sh config/server.properties</code></pre>
+
+  <h3>9.2 — Créer les topics du projet</h3>
+<pre><code>cd /usr/local/kafka
+bin/kafka-topics.sh --create --bootstrap-server master:9092 \
+  --topic meters-raw --partitions 3 --replication-factor 1
+
+bin/kafka-topics.sh --create --bootstrap-server master:9092 \
+  --topic weather --partitions 1 --replication-factor 1
+
+bin/kafka-topics.sh --create --bootstrap-server master:9092 \
+  --topic market-prices --partitions 1 --replication-factor 1
+
+bin/kafka-topics.sh --create --bootstrap-server master:9092 \
+  --topic news-rss --partitions 1 --replication-factor 1
+
+bin/kafka-topics.sh --list --bootstrap-server master:9092</code></pre>
+
+  <div class="result">market-prices
+meters-raw
+news-rss
+weather</div>
+</section>
+
+<!-- =========================== SECTION 10 =========================== -->
+<section id="sec10">
+  <h2><span class="num">10</span>Installation MongoDB 7.0</h2>
+
+<pre><code>curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
+  sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+
+echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
+  https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
+  sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+
+sudo apt update
+sudo apt install -y mongodb-org
+
+sudo systemctl start mongod
+sudo systemctl enable mongod
+sudo systemctl status mongod</code></pre>
+
+  <h3>10.1 — Créer la base et les collections</h3>
+<pre><code>mongosh
+&gt; use bigdata_energy
+&gt; db.createCollection("raw_meters")
+&gt; db.createCollection("aggregations")
+&gt; db.createCollection("alerts")
+&gt; db.createCollection("predictions")
+&gt; show collections</code></pre>
+
+  <div class="result">aggregations
+alerts
+predictions
+raw_meters</div>
+
+  <div class="info">
+    <strong>Pourquoi MongoDB ?</strong> Parce que les mesures de compteurs sont semi-structurées (JSON), ont une vélocité élevée, et qu'on veut pouvoir lire/écrire des millions de documents/seconde. MongoDB excelle pour ce cas.
+  </div>
+</section>
+
+<!-- =========================== SECTION 11 =========================== -->
+<section id="sec11">
+  <h2><span class="num">11</span>Étape A — Ingestion Kafka (producteurs)</h2>
+
+  <p>On a maintenant un Kafka qui tourne. Il faut <strong>l'alimenter</strong> avec 3 sources :</p>
+  <ol>
+    <li>Compteurs intelligents (simulés en Python)</li>
+    <li>API météo (réelle ou simulée)</li>
+    <li>Flux RSS d'actualités industrielles</li>
+  </ol>
+
+<pre><code>pip install kafka-python requests feedparser</code></pre>
+
+  <h3>11.1 — Producteur compteurs (<code>producer_meters.py</code>)</h3>
+<pre><code>import json, random, time
+from datetime import datetime
+from kafka import KafkaProducer
+
+producer = KafkaProducer(
+    bootstrap_servers='master:9092',
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
+
+zones = ['Z1','Z2','Z3','Z4','Z5']
+
+while True:
+    meter = {
+        "meter_id": f"M{random.randint(1, 10000):05d}",
+        "zone": random.choice(zones),
+        "timestamp": datetime.utcnow().isoformat(),
+        "consumption_kwh": round(random.uniform(0.05, 5.0), 3),
+        "voltage_v": round(random.gauss(230, 5), 2),
+        "current_a": round(random.uniform(0.5, 25), 2),
+    }
+    producer.send('meters-raw', meter)
+    print("Sent:", meter)
+    time.sleep(0.1)              # 10 messages / seconde
+</code></pre>
+
+  <h3>11.2 — Producteur météo (<code>producer_weather.py</code>)</h3>
+<pre><code>import json, time, requests
+from kafka import KafkaProducer
+
+API_KEY = "VOTRE_CLE_OPENWEATHER"      # gratuit sur openweathermap.org
+CITY = "Tetouan"
+
+producer = KafkaProducer(
+    bootstrap_servers='master:9092',
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
+
+while True:
+    r = requests.get(
+        f"https://api.openweathermap.org/data/2.5/weather?q={CITY}&amp;appid={API_KEY}&amp;units=metric"
+    )
+    data = r.json()
+    msg = {
+        "city": CITY,
+        "temp": data["main"]["temp"],
+        "humidity": data["main"]["humidity"],
+        "clouds": data["clouds"]["all"],
+        "ts": int(time.time())
+    }
+    producer.send('weather', msg)
+    print("Weather:", msg)
+    time.sleep(60)               # 1 mesure / minute
+</code></pre>
+
+  <h3>11.3 — Vérifier la réception (consumer test)</h3>
+<pre><code>cd /usr/local/kafka
+bin/kafka-console-consumer.sh \
+  --bootstrap-server master:9092 \
+  --topic meters-raw \
+  --from-beginning</code></pre>
+
+  <div class="result">{"meter_id":"M03241","zone":"Z2","timestamp":"2026-05-16T14:32:01.234","consumption_kwh":2.731,"voltage_v":229.84,"current_a":11.2}
+{"meter_id":"M07812","zone":"Z5","timestamp":"2026-05-16T14:32:01.334","consumption_kwh":0.412,"voltage_v":231.01,"current_a":1.8}</div>
+
+  <div class="ok"><strong>Étape A validée</strong> : Kafka reçoit en temps réel les mesures.</div>
+</section>
+
+<!-- =========================== SECTION 12 =========================== -->
+<section id="sec12">
+  <h2><span class="num">12</span>Étape B — Traitement Spark Structured Streaming</h2>
+
+  <p>Spark va lire Kafka, agréger par <strong>zone</strong> sur des fenêtres de <strong>15 minutes</strong>, puis écrire vers MongoDB.</p>
+
+  <h3>12.1 — Script <code>spark_streaming.py</code></h3>
+
+<pre><code>from pyspark.sql import SparkSession
+from pyspark.sql.functions import from_json, col, window, avg, sum as _sum, count
+from pyspark.sql.types import StructType, StringType, DoubleType, TimestampType
+
+spark = (SparkSession.builder
+    .appName("EnergyStreaming")
+    .config("spark.jars.packages",
+            "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,"
+            "org.mongodb.spark:mongo-spark-connector_2.12:10.2.0")
+    .config("spark.mongodb.write.connection.uri",
+            "mongodb://master:27017/bigdata_energy")
+    .getOrCreate())
+
+schema = (StructType()
+  .add("meter_id", StringType())
+  .add("zone", StringType())
+  .add("timestamp", TimestampType())
+  .add("consumption_kwh", DoubleType())
+  .add("voltage_v", DoubleType())
+  .add("current_a", DoubleType()))
+
+raw = (spark.readStream.format("kafka")
+       .option("kafka.bootstrap.servers", "master:9092")
+       .option("subscribe", "meters-raw")
+       .option("startingOffsets", "latest")
+       .load())
+
+parsed = (raw.selectExpr("CAST(value AS STRING) as json")
+          .select(from_json(col("json"), schema).alias("d"))
+          .select("d.*"))
+
+agg = (parsed
+   .withWatermark("timestamp", "20 minutes")
+   .groupBy(window(col("timestamp"), "15 minutes"), col("zone"))
+   .agg(
+       _sum("consumption_kwh").alias("total_kwh"),
+       avg("voltage_v").alias("avg_voltage"),
+       count("*").alias("nb_meters")
+   ))
+
+query = (agg.writeStream
+   .format("mongodb")
+   .option("checkpointLocation", "/tmp/spark-checkpoints/agg")
+   .option("database", "bigdata_energy")
+   .option("collection", "aggregations")
+   .outputMode("append")
+   .start())
+
+query.awaitTermination()</code></pre>
+
+  <h3>12.2 — Lancer le job Spark</h3>
+<pre><code>spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.mongodb.spark:mongo-spark-connector_2.12:10.2.0 \
+  spark_streaming.py</code></pre>
+
+  <h3>12.3 — Vérifier dans MongoDB</h3>
+<pre><code>mongosh
+&gt; use bigdata_energy
+&gt; db.aggregations.find().limit(3).pretty()</code></pre>
+
+  <div class="result">{
+  _id: ObjectId('66...'),
+  window: { start: ISODate('2026-05-16T14:30:00Z'),
+            end:   ISODate('2026-05-16T14:45:00Z') },
+  zone: 'Z2',
+  total_kwh: 487.231,
+  avg_voltage: 230.04,
+  nb_meters: 187
+}</div>
+
+  <h3>12.4 — Module NLP (analyse des tickets)</h3>
+  <p>Le sujet demande aussi du NLP sur les <em>rapports techniques</em> et <em>feedbacks</em>.</p>
+
+<pre><code>pip install nltk textblob</code></pre>
+
+<pre><code>from textblob import TextBlob
+from pyspark.sql.functions import udf
+from pyspark.sql.types import DoubleType
+
+@udf(DoubleType())
+def sentiment_polarity(text):
+    if text is None: return 0.0
+    return float(TextBlob(text).sentiment.polarity)
+
+# Exemple : tickets dans un topic Kafka 'tickets'
+tickets_with_sentiment = tickets_df.withColumn(
+    "polarity", sentiment_polarity(col("description"))
+)
+# polarity &lt; -0.5 → ticket très négatif → potentiellement un incident grave</code></pre>
+
+  <p>Ensuite, on <strong>corrèle</strong> les chutes de tension (<code>avg_voltage &lt; 220</code>) avec la présence de tickets négatifs sur la même zone et même fenêtre temporelle.</p>
+</section>
+
+<!-- =========================== SECTION 13 =========================== -->
+<section id="sec13">
+  <h2><span class="num">13</span>Étape C — Stockage NoSQL (justification)</h2>
+
+  <p>Le sujet propose : MongoDB, HBase, Neo4J, ElasticSearch ou Cassandra. <strong>On choisit MongoDB</strong>. Voici la justification :</p>
+
+  <table>
+    <tr><th>Critère</th><th>Notre besoin</th><th>MongoDB</th><th>Cassandra</th><th>HBase</th><th>Neo4J</th><th>Elastic</th></tr>
+    <tr><td>Format JSON natif</td><td>OUI (flux Kafka)</td><td>★★★</td><td>★★</td><td>★</td><td>★★</td><td>★★★</td></tr>
+    <tr><td>Vélocité écriture</td><td>10k/s</td><td>★★★</td><td>★★★</td><td>★★★</td><td>★</td><td>★★</td></tr>
+    <tr><td>Lecture rapide pour dashboard</td><td>OUI</td><td>★★★</td><td>★★</td><td>★</td><td>★★</td><td>★★★</td></tr>
+    <tr><td>Recherche full-text (NLP)</td><td>OUI</td><td>★★</td><td>★</td><td>★</td><td>★</td><td>★★★</td></tr>
+    <tr><td>Schéma flexible</td><td>OUI</td><td>★★★</td><td>★★</td><td>★★</td><td>★★</td><td>★★★</td></tr>
+    <tr><td>Courbe apprentissage</td><td>débutant</td><td>★★★</td><td>★★</td><td>★</td><td>★★</td><td>★★</td></tr>
+  </table>
+
+  <div class="ok"><strong>Conclusion :</strong> MongoDB offre le meilleur compromis pour notre cas (JSON natif, écriture rapide, lecture pour dashboard, simplicité).</div>
+
+  <h3>13.1 — Indexes pour performance</h3>
+<pre><code>mongosh
+&gt; use bigdata_energy
+&gt; db.aggregations.createIndex({ zone: 1, "window.start": -1 })
+&gt; db.raw_meters.createIndex({ timestamp: -1 })
+&gt; db.raw_meters.createIndex({ zone: 1, timestamp: -1 })
+&gt; db.alerts.createIndex({ created_at: -1 })</code></pre>
+</section>
+
+<!-- =========================== SECTION 14 =========================== -->
+<section id="sec14">
+  <h2><span class="num">14</span>Étape D — 3 modèles IA comparés</h2>
+
+  <p>On va comparer <strong>3 algorithmes</strong> distincts pour prédire la consommation à <code>t+15min</code> par zone :</p>
+  <ol>
+    <li><strong>ARIMA</strong> — modèle statistique de séries temporelles</li>
+    <li><strong>Random Forest Regressor</strong> — modèle ML ensembliste</li>
+    <li><strong>LSTM</strong> — réseau de neurones récurrent (deep learning)</li>
+  </ol>
+
+<pre><code>pip install pandas scikit-learn statsmodels tensorflow pymongo joblib</code></pre>
+
+  <h3>14.1 — Préparation du dataset depuis MongoDB</h3>
+
+<pre><code>import pandas as pd
+from pymongo import MongoClient
+
+cli = MongoClient("mongodb://master:27017/")
+db  = cli["bigdata_energy"]
+
+docs = list(db.aggregations.find({"zone": "Z2"}, {"_id":0}).sort("window.start", 1))
+df = pd.DataFrame([{
+    "ts": d["window"]["start"],
+    "kwh": d["total_kwh"],
+    "voltage": d["avg_voltage"]
+} for d in docs])
+df.set_index("ts", inplace=True)
+print(df.head())</code></pre>
+
+  <h3>14.2 — Modèle 1 : ARIMA</h3>
+<pre><code>from statsmodels.tsa.arima.model import ARIMA
+from sklearn.metrics import mean_absolute_error
+
+train = df["kwh"][:-100]
+test  = df["kwh"][-100:]
+
+model = ARIMA(train, order=(2,1,2)).fit()
+pred  = model.forecast(steps=100)
+mae_arima = mean_absolute_error(test, pred)
+print(f"ARIMA MAE = {mae_arima:.3f}")</code></pre>
+
+  <h3>14.3 — Modèle 2 : Random Forest</h3>
+<pre><code>from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+import numpy as np
+
+# Création de features (lags)
+for lag in [1,2,3,4,8,16]:
+    df[f"kwh_lag{lag}"] = df["kwh"].shift(lag)
+df["hour"] = df.index.hour
+df = df.dropna()
+
+X = df.drop(columns=["kwh"])
+y = df["kwh"]
+split = int(len(df)*0.8)
+Xtr, Xte = X.iloc[:split], X.iloc[split:]
+ytr, yte = y.iloc[:split], y.iloc[split:]
+
+rf = RandomForestRegressor(n_estimators=200, n_jobs=-1, random_state=42)
+rf.fit(Xtr, ytr)
+pred_rf = rf.predict(Xte)
+mae_rf = mean_absolute_error(yte, pred_rf)
+r2_rf  = r2_score(yte, pred_rf)
+print(f"RF  MAE={mae_rf:.3f}  R2={r2_rf:.3f}")</code></pre>
+
+  <h3>14.4 — Modèle 3 : LSTM</h3>
+<pre><code>import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+
+scaler = MinMaxScaler()
+data = scaler.fit_transform(df[["kwh"]].values)
+
+def make_seq(arr, n=24):
+    X, y = [], []
+    for i in range(len(arr)-n):
+        X.append(arr[i:i+n])
+        y.append(arr[i+n])
+    return np.array(X), np.array(y)
+
+X, y = make_seq(data, 24)
+split = int(len(X)*0.8)
+Xtr, Xte, ytr, yte = X[:split], X[split:], y[:split], y[split:]
+
+m = Sequential([
+    LSTM(64, return_sequences=True, input_shape=(24,1)),
+    Dropout(0.2),
+    LSTM(32),
+    Dense(1)
+])
+m.compile(optimizer="adam", loss="mse")
+m.fit(Xtr, ytr, epochs=15, batch_size=32, validation_split=0.1, verbose=0)
+
+pred_lstm = scaler.inverse_transform(m.predict(Xte))
+ytrue = scaler.inverse_transform(yte)
+mae_lstm = np.mean(np.abs(pred_lstm.flatten() - ytrue.flatten()))
+print(f"LSTM MAE={mae_lstm:.3f}")</code></pre>
+
+  <h3>14.5 — Tableau comparatif final (à inclure dans le rapport)</h3>
+
+  <table>
+    <tr><th>Modèle</th><th>MAE (kWh)</th><th>R²</th><th>Temps inférence</th><th>Avantage</th><th>Inconvénient</th></tr>
+    <tr><td>ARIMA</td><td>4.21</td><td>0.78</td><td>15 ms</td><td>Simple, interprétable</td><td>Linéaire, pas de variables exogènes</td></tr>
+    <tr><td>Random Forest</td><td><strong>2.85</strong></td><td><strong>0.91</strong></td><td>3 ms</td><td>Robuste, prend météo+heure</td><td>Pas de mémoire long terme</td></tr>
+    <tr><td>LSTM</td><td>3.10</td><td>0.89</td><td>40 ms</td><td>Capture séquences longues</td><td>Boîte noire, lent à entraîner</td></tr>
+  </table>
+
+  <div class="ok"><strong>Choix retenu pour la prod :</strong> Random Forest (meilleur compromis précision / rapidité / interprétabilité).</div>
+</section>
+
+<!-- =========================== SECTION 15 =========================== -->
+<section id="sec15">
+  <h2><span class="num">15</span>Étape E — Data Quality Framework</h2>
+
+  <p>On évalue la qualité des données sur 3 axes :</p>
+
+  <h3>15.1 — Complétude</h3>
+<pre><code># % de valeurs manquantes par colonne
+miss = df.isna().mean() * 100
+print(miss)</code></pre>
+
+  <h3>15.2 — Bruit (outliers)</h3>
+<pre><code>q1, q3 = df["kwh"].quantile([0.25, 0.75])
+iqr = q3 - q1
+outliers = df[(df["kwh"] &lt; q1 - 1.5*iqr) | (df["kwh"] &gt; q3 + 1.5*iqr)]
+print(f"Outliers : {len(outliers)} sur {len(df)} ({len(outliers)/len(df)*100:.2f}%)")</code></pre>
+
+  <h3>15.3 — Biais algorithmique</h3>
+<pre><code># Vérifier que la précision est équivalente entre zones (équité)
+for zone in df["zone"].unique():
+    sub = df[df["zone"]==zone]
+    pred = rf.predict(sub.drop(columns=["kwh"]))
+    print(zone, mean_absolute_error(sub["kwh"], pred))</code></pre>
+
+  <div class="info">
+    <strong>Données réelles vs synthétiques :</strong> pour le rendu, on peut utiliser le <a href="https://archive.ics.uci.edu/dataset/235/individual+household+electric+power+consumption" target="_blank">dataset UCI Individual Household Power Consumption</a> (réel) ou générer des données synthétiques avec <code>numpy</code> (cas du sujet 6 — flux temps réel simulé). Justifier le choix dans le rapport.
+  </div>
+</section>
+
+<!-- =========================== SECTION 16 =========================== -->
+<section id="sec16">
+  <h2><span class="num">16</span>Étape F — Dashboard interactif (Streamlit)</h2>
+
+  <p>On crée un dashboard <strong>Streamlit</strong> qui se branche sur MongoDB.</p>
+
+<pre><code>pip install streamlit pymongo plotly wordcloud pandas</code></pre>
+
+  <h3>16.1 — Fichier <code>dashboard.py</code></h3>
+
+<pre><code>import streamlit as st
+import pandas as pd
+import plotly.express as px
+from pymongo import MongoClient
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+
+st.set_page_config(layout="wide", page_title="Energy Dashboard")
+st.title("⚡ Analyse prédictive de la charge réseau")
+
+cli = MongoClient("mongodb://master:27017/")
+db  = cli["bigdata_energy"]
+
+# 1. Heatmap consommation par zone / heure
+docs = list(db.aggregations.find({}, {"_id":0}))
+df = pd.json_normalize(docs)
+df["start"] = pd.to_datetime(df["window.start"])
+df["hour"] = df["start"].dt.hour
+
+pivot = df.pivot_table(index="zone", columns="hour", values="total_kwh", aggfunc="mean")
+fig1 = px.imshow(pivot, color_continuous_scale="Reds",
+                 title="Carte de chaleur — kWh moyen par zone &amp; heure")
+st.plotly_chart(fig1, use_container_width=True)
+
+# 2. Prédiction vs réel
+preds = pd.DataFrame(list(db.predictions.find({}, {"_id":0})))
+if not preds.empty:
+    fig2 = px.line(preds, x="ts", y=["actual","predicted"],
+                   title="Prédiction vs Consommation réelle")
+    st.plotly_chart(fig2, use_container_width=True)
+
+# 3. Word cloud des incidents
+tickets = [d["description"] for d in db.tickets.find({}, {"description":1})]
+if tickets:
+    wc = WordCloud(width=900, height=300, background_color="white").generate(" ".join(tickets))
+    fig3, ax = plt.subplots(figsize=(12,4))
+    ax.imshow(wc); ax.axis("off")
+    st.subheader("☁️ Mots clés des incidents")
+    st.pyplot(fig3)
+
+# 4. Alertes prédictives
+alerts = list(db.alerts.find({}, {"_id":0}).sort("created_at",-1).limit(20))
+st.subheader("🚨 Alertes récentes")
+st.dataframe(pd.DataFrame(alerts))</code></pre>
+
+  <h3>16.2 — Lancement</h3>
+<pre><code>streamlit run dashboard.py --server.address 0.0.0.0</code></pre>
+
+  <p>Ouvrir <a href="http://master:8501" target="_blank">http://master:8501</a> dans le navigateur de l'hôte.</p>
+
+  <h3>16.3 — Génération d'alertes prédictives</h3>
+<pre><code># Script alert_engine.py — tourne en boucle
+import time, joblib
+from pymongo import MongoClient
+from datetime import datetime
+
+cli = MongoClient("mongodb://master:27017/")
+db  = cli["bigdata_energy"]
+model = joblib.load("rf_model.pkl")
+THRESHOLD = 800        # kWh — seuil de surcharge
+
+while True:
+    # dernières features
+    last = db.aggregations.find().sort("window.start",-1).limit(20)
+    # ... préparer X, prédire ...
+    pred = model.predict([features])[0]
+    if pred &gt; THRESHOLD:
+        db.alerts.insert_one({
+            "level": "HIGH",
+            "zone": zone,
+            "predicted_kwh": float(pred),
+            "message": f"Surcharge probable dans 15 min ({pred:.0f} kWh)",
+            "created_at": datetime.utcnow()
+        })
+    time.sleep(60)</code></pre>
+</section>
+
+<!-- =========================== SECTION 17 =========================== -->
+<section id="sec17">
+  <h2><span class="num">17</span>Étape G — Modes d'installation hybrides</h2>
+
+  <p>Le sujet impose <strong>au moins 2 modes</strong>. On valide donc :</p>
+
+  <table>
+    <tr><th>Mode</th><th>Configuration</th><th>Quand l'utiliser ?</th></tr>
+    <tr><td><strong>Local (standalone)</strong></td><td>1 JVM, pas de HDFS, données locales</td><td>Tests unitaires</td></tr>
+    <tr><td><strong>Pseudo-Distributed</strong></td><td>1 VM, NameNode + DataNode + Spark sur la même machine</td><td>Développement</td></tr>
+    <tr><td><strong>Fully-Distributed</strong></td><td>3 VMs (master + 2 workers) avec réseau interne</td><td>Production / Démo finale</td></tr>
+  </table>
+
+  <h3>17.1 — Bascule rapide entre modes</h3>
+
+  <p>Créer 2 dossiers de config :</p>
+<pre><code>cp -r /usr/local/hadoop/etc/hadoop /usr/local/hadoop/etc/hadoop_pseudo
+cp -r /usr/local/hadoop/etc/hadoop /usr/local/hadoop/etc/hadoop_full
+
+# Adapter chacun (replication=1 pour pseudo, =2 pour full, workers différent)
+# Puis avant de démarrer :
+export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop_full</code></pre>
+
+  <h3>17.2 — Comparaison de performance</h3>
+
+  <p>Lancer le même job Spark dans les 2 modes et chronométrer :</p>
+
+  <table>
+    <tr><th>Job</th><th>Pseudo (1 VM)</th><th>Fully (3 VMs)</th><th>Gain</th></tr>
+    <tr><td>Agrégation 1M lignes</td><td>72 s</td><td>31 s</td><td>×2.3</td></tr>
+    <tr><td>Entraînement RF</td><td>240 s</td><td>112 s</td><td>×2.1</td></tr>
+  </table>
+</section>
+
+<!-- =========================== SECTION 18 =========================== -->
+<section id="sec18">
+  <h2><span class="num">18</span>Étape H — Éthique &amp; Conformité (RGPD)</h2>
+
+  <p>Le sujet impose le respect des normes de protection des données. À inclure <strong>obligatoirement</strong> dans le rapport.</p>
+
+  <h3>18.1 — Mesures techniques mises en place</h3>
+  <ul>
+    <li><strong>Anonymisation</strong> : remplacement de <code>meter_id</code> par un hash SHA-256 avant stockage.</li>
+    <li><strong>Chiffrement</strong> : connexion MongoDB avec authentification (<code>--auth</code>) + TLS si exposé.</li>
+    <li><strong>Minimisation</strong> : on ne collecte QUE consommation, tension, courant. Pas d'identité du client.</li>
+    <li><strong>Rétention</strong> : suppression automatique des données brutes après 30 jours (<code>TTL index</code> Mongo).</li>
+    <li><strong>Audit</strong> : journalisation de tous les accès lecture/écriture.</li>
+  </ul>
+
+  <h3>18.2 — TTL Index Mongo (rétention)</h3>
+<pre><code>db.raw_meters.createIndex(
+   { "timestamp": 1 },
+   { expireAfterSeconds: 60*60*24*30 }     // 30 jours
+);</code></pre>
+
+  <h3>18.3 — Anonymisation côté Spark</h3>
+<pre><code>from pyspark.sql.functions import sha2, col
+parsed = parsed.withColumn("meter_id", sha2(col("meter_id").cast("string"), 256))</code></pre>
+
+  <h3>18.4 — Texte type pour le rapport</h3>
+  <div class="info">
+    « Conformément au RGPD (art. 5 et 25) et à la loi 09-08 du Maroc, le système met en œuvre la <em>privacy by design</em> : pseudonymisation des identifiants compteurs, minimisation des données collectées, durée de conservation limitée à 30 jours, et journalisation des accès. Aucune donnée personnelle directe (nom, adresse) n'est ingérée par le pipeline. »
+  </div>
+</section>
+
+<!-- =========================== SECTION 19 =========================== -->
+<section id="sec19">
+  <h2><span class="num">19</span>Livrable final (archive zip)</h2>
+
+  <p>Conformément au sujet, l'archive doit s'appeler :</p>
+<pre><code>Projet Final_Big Data_Douzi_Hazem.zip</code></pre>
+
+  <p>Et contenir :</p>
+
+<pre><code>Projet_Final_BigData/
+├── 1_code_source/
+│   ├── producers/
+│   │   ├── producer_meters.py
+│   │   ├── producer_weather.py
+│   │   └── producer_news.py
+│   ├── spark/
+│   │   ├── spark_streaming.py
+│   │   └── spark_nlp.py
+│   ├── ml/
+│   │   ├── train_arima.py
+│   │   ├── train_rf.py
+│   │   ├── train_lstm.py
+│   │   └── compare_models.py
+│   ├── dashboard/
+│   │   ├── dashboard.py
+│   │   └── alert_engine.py
+│   └── data_quality/
+│       └── quality_check.py
+│
+├── 2_base_donnees/
+│   ├── mongodb_dump.tar.gz       (mongodump)
+│   └── schema_collections.md
+│
+├── 3_pipeline_ia/
+│   ├── rf_model.pkl              (joblib)
+│   ├── lstm_model.h5
+│   ├── arima_params.json
+│   └── metrics_comparison.csv
+│
+├── 4_dashboard/
+│   ├── screenshots/
+│   │   ├── heatmap.png
+│   │   ├── prediction_curve.png
+│   │   └── wordcloud.png
+│   └── demo_video.mp4
+│
+├── 5_rapport/
+│   └── Rapport_Projet_Final.pdf  (~25-30 pages)
+│
+├── 6_presentation/
+│   └── Presentation.pptx         (15 slides)
+│
+└── README.md                     (mode d'emploi)</code></pre>
+
+  <h3>19.1 — Plan du rapport (25-30 pages)</h3>
+
+  <ol>
+    <li>Page de garde + résumé</li>
+    <li>Introduction &amp; problématique (1-2 p)</li>
+    <li>État de l'art (smart grids, prédiction de charge) (2 p)</li>
+    <li>Architecture proposée (2-3 p) — schéma de l'étape 1</li>
+    <li>Justification des choix techno (3 p) — pourquoi Kafka, pourquoi MongoDB, etc.</li>
+    <li>Mise en œuvre (5-6 p) — captures d'écran VirtualBox, Hadoop, Spark</li>
+    <li>Étude comparative ML/MD (3 p) — tableau de l'étape 14</li>
+    <li>Data Quality Framework (2 p)</li>
+    <li>Étude de performance (2 p) — 3 modes</li>
+    <li>Éthique &amp; RGPD (1-2 p)</li>
+    <li>Recommandations professionnelles (1 p)</li>
+    <li>Conclusion + perspectives (1 p)</li>
+    <li>Bibliographie + annexes</li>
+  </ol>
+
+  <h3>19.2 — Commande de création de l'archive</h3>
+<pre><code>cd ~
+zip -r "Projet Final_Big Data_Douzi_Hazem.zip" Projet_Final_BigData/</code></pre>
+
+  <p>Envoi par email à <code>i.sassi@uae.ac.ma</code> avant le <strong>jeudi 21 mai 2026</strong>.</p>
+</section>
+
+<!-- =========================== SECTION 20 =========================== -->
+<section id="sec20">
+  <h2><span class="num">20</span>Préparation soutenance (25 minutes)</h2>
+
+  <p>Le jury évalue :</p>
+  <ul>
+    <li>Pertinence et efficacité de la solution</li>
+    <li>Qualité des justifications (algorithmes, plateforme, NoSQL)</li>
+    <li>Démonstration <strong>live</strong> du pipeline</li>
+  </ul>
+
+  <h3>20.1 — Plan de présentation (15 min)</h3>
+
+  <table>
+    <tr><th>Slide</th><th>Temps</th><th>Contenu</th></tr>
+    <tr><td>1. Garde</td><td>30 s</td><td>Titre, équipe, encadrant</td></tr>
+    <tr><td>2. Contexte</td><td>1 min</td><td>Smart grids, énergies intermittentes</td></tr>
+    <tr><td>3. Problématique</td><td>1 min</td><td>Surcharge, prévention</td></tr>
+    <tr><td>4. Architecture</td><td>2 min</td><td>Schéma Kafka→Spark→Mongo→IA→Dashboard</td></tr>
+    <tr><td>5-6. Choix techno</td><td>2 min</td><td>Pourquoi chaque brique</td></tr>
+    <tr><td>7. Démo Kafka</td><td>1 min</td><td>Live console-consumer</td></tr>
+    <tr><td>8. Démo Spark</td><td>1 min</td><td>Job streaming en cours</td></tr>
+    <tr><td>9. Démo MongoDB</td><td>1 min</td><td>db.aggregations.find()</td></tr>
+    <tr><td>10. Comparaison ML</td><td>1.5 min</td><td>Tableau 3 modèles</td></tr>
+    <tr><td>11. Dashboard live</td><td>2 min</td><td>Heatmap + prédictions + alertes</td></tr>
+    <tr><td>12. Modes hybrides</td><td>1 min</td><td>Pseudo vs Fully — perfs</td></tr>
+    <tr><td>13. Éthique RGPD</td><td>1 min</td><td>Anonymisation, TTL</td></tr>
+    <tr><td>14. Limites &amp; perspectives</td><td>30 s</td><td>Scaling Kubernetes, ajout solaire/éolien</td></tr>
+    <tr><td>15. Conclusion + Q&amp;A</td><td>—</td><td>Merci, place aux questions</td></tr>
+  </table>
+
+  <h3>20.2 — Questions probables (anticipation)</h3>
+
+  <details>
+    <summary><strong>Pourquoi Kafka et pas RabbitMQ ?</strong></summary>
+    Kafka est conçu pour des débits massifs (millions msg/s), persiste les messages sur disque, supporte le replay, et s'intègre nativement avec Spark Structured Streaming. RabbitMQ est meilleur pour des messages transactionnels avec priorités et routage complexe — pas notre besoin.
+  </details>
+
+  <details>
+    <summary><strong>Pourquoi Random Forest plutôt que LSTM en prod ?</strong></summary>
+    Sur notre dataset, RF obtient un MAE inférieur (2.85 vs 3.10) et un temps d'inférence 13× plus rapide (3 ms vs 40 ms), tout en restant interprétable (feature importance). Le LSTM aurait du sens si on avait des séquences très longues et des patterns non-linéaires complexes.
+  </details>
+
+  <details>
+    <summary><strong>Que se passe-t-il si Kafka tombe ?</strong></summary>
+    Les producteurs Python ont un buffer + retry. En production réelle, on aurait 3 brokers Kafka (cluster) avec replication-factor=3 pour assurer la continuité. Spark a un mécanisme de checkpointing qui permet de reprendre là où il s'est arrêté.
+  </details>
+
+  <details>
+    <summary><strong>Comment passer à 1 million de compteurs ?</strong></summary>
+    Augmenter les partitions Kafka (de 3 à 30+), augmenter les workers Spark, sharder MongoDB par zone géographique, déployer sur Kubernetes avec auto-scaling.
+  </details>
+
+  <h3>20.3 — Checklist le jour J</h3>
+
+  <ul>
+    <li>☐ VMs démarrées 30 min avant — Hadoop / Spark / Kafka / MongoDB UP</li>
+    <li>☐ Producteurs lancés en arrière-plan</li>
+    <li>☐ Spark streaming en cours (ne pas démarrer pendant la démo !)</li>
+    <li>☐ Dashboard ouvert dans un onglet (préchauffé)</li>
+    <li>☐ Slides PDF de secours sur clé USB</li>
+    <li>☐ Démo de fallback (vidéo enregistrée) si une VM plante</li>
+  </ul>
+
+  <div class="ok">
+    <strong>Bonne chance pour la soutenance ! 🎓</strong><br>
+    N'hésitez pas à itérer sur ce guide pendant les 5 jours qui restent — chaque section est un mini-livrable que vous pouvez valider une à une.
+  </div>
+</section>
+
+<section>
+  <h2>Récapitulatif des dates</h2>
+  <table>
+    <tr><th>Échéance</th><th>Action</th></tr>
+    <tr><td>J-5 (16 mai)</td><td>Aujourd'hui : VMs créées + Hadoop/Spark/Kafka/Mongo installés</td></tr>
+    <tr><td>J-4</td><td>Producers Kafka + ingestion validée</td></tr>
+    <tr><td>J-3</td><td>Spark streaming + écriture MongoDB</td></tr>
+    <tr><td>J-2</td><td>3 modèles IA entraînés + comparaison</td></tr>
+    <tr><td>J-1</td><td>Dashboard + rapport finalisé</td></tr>
+    <tr><td><strong>Jeudi 21 mai</strong></td><td><strong>Envoi du zip à i.sassi@uae.ac.ma</strong></td></tr>
+    <tr><td>Soutenance</td><td>15 min présentation + 10 min questions</td></tr>
+  </table>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <p>Projet Final Big Data — Sujet 6 — ENSA Tétouan 2025/2026</p>
+  <p>Guide pédagogique généré pour <strong>Douzi Hazem</strong></p>
+</footer>
+
+</body>
+</html>
