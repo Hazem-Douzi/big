@@ -97,6 +97,26 @@ def _parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--history-file",
+        type=str,
+        default=None,
+        help=(
+            "Fichier JSON-lines pour l'historique des fenetres 15 min "
+            "(1 ligne par quartier x fenetre). Idealement consomme par "
+            "tools/build_dashboard.py pour visualiser la tendance."
+        ),
+    )
+    parser.add_argument(
+        "--history-max-windows",
+        type=int,
+        default=96,
+        help=(
+            "Nombre maximum de fenetres conservees dans le fichier "
+            "d'historique (rolling window). 0 = illimite. "
+            "Defaut: 96 fenetres (24h de simulation)."
+        ),
+    )
+    parser.add_argument(
         "--log-level",
         type=str,
         default=config.LOG_LEVEL,
@@ -168,6 +188,8 @@ def main() -> int:
         seed=args.seed,
         start_time=start_time,
         num_buckets=args.num_buckets,
+        history_file=args.history_file,
+        history_max_windows=args.history_max_windows,
     )
 
     num_cycles = None if args.cycles == 0 else args.cycles

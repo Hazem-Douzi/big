@@ -190,11 +190,21 @@ def generate_meter_reading(
     )
 
 
-def aggregate_distributor(readings) -> dict:
+def aggregate_distributor(
+    readings,
+    window_start: str = None,
+    window_end: str = None,
+) -> dict:
     """
-    Agrege une liste de MeterReading appartenant a un meme distributeur.
+    Agrege une liste de MeterReading appartenant a un meme distributeur sur une
+    fenetre temporelle de 15 min (Tumbling Window de Spark Structured Streaming).
 
-    Renvoie un dict pret a etre publie sur le topic distributeur (niveau 2).
+    :param readings: liste de MeterReading collectees pendant la fenetre
+    :param window_start: ISO 8601 du debut de la fenetre (ex: 2026-05-16T14:00:00)
+    :param window_end:   ISO 8601 de la fin de la fenetre (ex: 2026-05-16T14:15:00)
+
+    Renvoie un dict pret a etre publie sur le topic distributeur (niveau 2)
+    avec window_start / window_end materialisant le fenetrage 15 min.
     """
     n = len(readings)
     if n == 0:
@@ -215,7 +225,13 @@ def aggregate_distributor(readings) -> dict:
         "district": first.district,
         "district_code": first.district_code,
         "zone_type": first.zone_type,
-        "timestamp": first.timestamp,
+        # ----- fenetrage 15 min ------------------------------------------
+        "window_start": window_start or first.timestamp,
+        "window_end":   window_end,
+        "window_duration_min": 15,
+        # ----- compatibilite : ancien champ timestamp ---------------------
+        "timestamp": window_start or first.timestamp,
+        # ----- agregations sur la fenetre ---------------------------------
         "total_meters": n,
         "total_energy_kwh": round(total_energy, 4),
         "avg_voltage": round(avg_voltage, 2),
@@ -226,9 +242,18 @@ def aggregate_distributor(readings) -> dict:
     }
 
 
-def aggregate_concentrator(distributor_aggs) -> dict:
+def aggregate_concentrator(
+    distributor_aggs,
+    window_start: str = None,
+    window_end: str = None,
+) -> dict:
     """
-    Agrege une liste de dicts produits par aggregate_distributor (meme quartier).
+    Agrege une liste de dicts produits par aggregate_distributor (meme quartier),
+    pour une meme fenetre temporelle de 15 min.
+
+    :param distributor_aggs: liste d'agregations de distributeurs du quartier
+    :param window_start: debut de la fenetre 15 min
+    :param window_end:   fin de la fenetre 15 min
 
     Renvoie un dict pret a etre publie sur le topic concentrateur (niveau 3).
     """
@@ -246,12 +271,22 @@ def aggregate_concentrator(distributor_aggs) -> dict:
     anomalies = sum(a["anomalies_count"] for a in distributor_aggs)
 
     first = distributor_aggs[0]
+    # heriter de la fenetre des distributeurs si non fournie
+    inferred_start = window_start or first.get("window_start") or first.get("timestamp")
+    inferred_end = window_end or first.get("window_end")
+
     return {
         "concentrator_id": first["concentrator_id"],
         "district": first["district"],
         "district_code": first["district_code"],
         "zone_type": first["zone_type"],
-        "timestamp": first["timestamp"],
+        # ----- fenetrage 15 min ------------------------------------------
+        "window_start": inferred_start,
+        "window_end":   inferred_end,
+        "window_duration_min": 15,
+        # ----- compatibilite ---------------------------------------------
+        "timestamp": inferred_start,
+        # ----- agregations sur la fenetre ---------------------------------
         "total_distributors": n,
         "total_meters": total_meters,
         "total_energy_kwh": round(total_energy, 4),
