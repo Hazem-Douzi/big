@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>TP N°9 - Spark, RDD, MLlib - Guide pas à pas</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    line-height: 1.6;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 20px;
+    background: #f4f6fa;
+    color: #2c3e50;
+  }
+  header {
+    background: linear-gradient(135deg, #e25822, #f4a261);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+  header h1 { margin: 0; font-size: 2em; }
+  header p { margin: 5px 0 0; opacity: 0.95; }
+
+  h2 {
+    color: #e25822;
+    border-bottom: 3px solid #e25822;
+    padding-bottom: 8px;
+    margin-top: 40px;
+  }
+  h3 {
+    color: #264653;
+    margin-top: 25px;
+  }
+  h4 { color: #2a9d8f; }
+
+  .card {
+    background: white;
+    padding: 25px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  .step {
+    background: #f0f9ff;
+    border-left: 5px solid #0ea5e9;
+    padding: 15px 20px;
+    margin: 15px 0;
+    border-radius: 6px;
+  }
+  .step-number {
+    display: inline-block;
+    background: #0ea5e9;
+    color: white;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 30px;
+    font-weight: bold;
+    margin-right: 10px;
+  }
+
+  .info {
+    background: #fef3c7;
+    border-left: 5px solid #f59e0b;
+    padding: 12px 18px;
+    margin: 15px 0;
+    border-radius: 6px;
+  }
+  .success {
+    background: #d1fae5;
+    border-left: 5px solid #10b981;
+    padding: 12px 18px;
+    margin: 15px 0;
+    border-radius: 6px;
+  }
+  .warning {
+    background: #fee2e2;
+    border-left: 5px solid #ef4444;
+    padding: 12px 18px;
+    margin: 15px 0;
+    border-radius: 6px;
+  }
+
+  pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 18px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.9em;
+    line-height: 1.5;
+  }
+  code {
+    background: #e2e8f0;
+    color: #1e293b;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.92em;
+  }
+  pre code { background: transparent; color: inherit; padding: 0; }
+
+  .keyword { color: #f472b6; }
+  .string  { color: #a3e635; }
+  .comment { color: #94a3b8; font-style: italic; }
+  .number  { color: #fbbf24; }
+  .func    { color: #60a5fa; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    background: white;
+  }
+  th, td {
+    border: 1px solid #cbd5e1;
+    padding: 10px;
+    text-align: left;
+  }
+  th {
+    background: #e25822;
+    color: white;
+  }
+  tr:nth-child(even) { background: #f8fafc; }
+
+  .toc {
+    background: white;
+    padding: 20px 30px;
+    border-radius: 10px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .toc ul { list-style: none; padding-left: 0; }
+  .toc li { margin: 8px 0; }
+  .toc a {
+    color: #e25822;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .toc a:hover { text-decoration: underline; }
+
+  .badge {
+    display: inline-block;
+    background: #2a9d8f;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    margin-right: 5px;
+  }
+
+  details {
+    background: #f8fafc;
+    padding: 12px 18px;
+    border-radius: 6px;
+    margin: 12px 0;
+    border: 1px solid #cbd5e1;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: bold;
+    color: #e25822;
+  }
+
+  footer {
+    text-align: center;
+    margin-top: 50px;
+    padding: 20px;
+    color: #64748b;
+    border-top: 1px solid #cbd5e1;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 TP N°9 — Spark, RDD &amp; MLlib</h1>
+  <p><strong>ENSA Tétouan</strong> — Fondamentaux de Big Data — Pr. Imad Sassi</p>
+  <p>Filière : Sciences des Données, Big Data &amp; Intelligence Artificielle (2025-2026)</p>
+  <p>👨‍🎓 <strong>Étudiant :</strong> Douzi Hazem &nbsp;|&nbsp; 📅 <strong>À rendre :</strong> 15 mai 2026</p>
+</header>
+
+<!-- =================== TABLE DES MATIÈRES =================== -->
+<div class="toc">
+  <h2 style="margin-top:0; border:none;">📑 Table des matières</h2>
+  <ul>
+    <li>🔧 <a href="#prerequis">0. Prérequis et installation</a></li>
+    <li>📚 <a href="#concepts">1. Concepts de base : Spark &amp; RDD</a></li>
+    <li>🟢 <a href="#ex1">Exercice 1 — Word Count avec PySpark</a></li>
+    <li>🟡 <a href="#ex2">Exercice 2 — MapReduce sur les cookies</a></li>
+    <li>🔵 <a href="#ex3">Exercice 3 — k-Means avec Spark</a></li>
+    <li>📁 <a href="#rendu">📦 Préparation du rendu</a></li>
+  </ul>
+</div>
+
+<!-- =================== PRÉREQUIS =================== -->
+<section id="prerequis" class="card">
+  <h2>🔧 0. Prérequis et installation</h2>
+
+  <p>Avant de commencer, il faut installer <strong>Java</strong>, <strong>Python</strong> et <strong>PySpark</strong>.</p>
+
+  <h3>Étape 1 : installer Java (JDK 8 ou 11)</h3>
+  <p>Spark a besoin de Java pour fonctionner.</p>
+  <pre><code><span class="comment"># Vérifier si Java est déjà installé</span>
+java -version
+
+<span class="comment"># Sous Ubuntu / Debian</span>
+sudo apt install openjdk-11-jdk -y
+
+<span class="comment"># Sous Windows : télécharger depuis https://adoptium.net/</span></code></pre>
+
+  <h3>Étape 2 : installer Python 3 et PySpark</h3>
+  <pre><code><span class="comment"># Vérifier Python</span>
+python3 --version
+
+<span class="comment"># Installer PySpark (qui inclut Spark)</span>
+pip install pyspark numpy
+
+<span class="comment"># Pour l'exercice 3, on a besoin de scikit-learn pour générer le dataset blobs</span>
+pip install scikit-learn matplotlib</code></pre>
+
+  <div class="info">
+    💡 <strong>Astuce :</strong> Il est recommandé de créer un environnement virtuel pour éviter les conflits :
+    <pre><code>python3 -m venv venv
+source venv/bin/activate   <span class="comment"># Linux/Mac</span>
+venv\Scripts\activate      <span class="comment"># Windows</span>
+pip install pyspark numpy scikit-learn matplotlib</code></pre>
+  </div>
+
+  <h3>Étape 3 : tester l'installation</h3>
+  <pre><code>python3 -c <span class="string">"from pyspark import SparkContext; print('PySpark OK !')"</span></code></pre>
+</section>
+
+<!-- =================== CONCEPTS =================== -->
+<section id="concepts" class="card">
+  <h2>📚 1. Concepts de base : Spark &amp; RDD</h2>
+
+  <h3>Qu'est-ce que Spark ?</h3>
+  <p><strong>Apache Spark</strong> est un moteur de traitement <strong>distribué</strong> pour les données massives (Big Data). Il est :</p>
+  <ul>
+    <li>⚡ <strong>Rapide</strong> : calcule en mémoire (jusqu'à 100× plus rapide que Hadoop MapReduce)</li>
+    <li>🐍 <strong>Polyglotte</strong> : disponible en Python (PySpark), Scala, Java, R</li>
+    <li>📦 <strong>Riche</strong> : RDD, DataFrame, MLlib (machine learning), Streaming, GraphX</li>
+  </ul>
+
+  <h3>Qu'est-ce qu'un RDD ?</h3>
+  <p><strong>RDD</strong> = <em>Resilient Distributed Dataset</em> (jeu de données distribué et résilient).
+  C'est la structure de données fondamentale de Spark : une collection d'éléments répartie sur plusieurs machines (ou cœurs CPU).</p>
+
+  <table>
+    <tr><th>Type</th><th>Description</th><th>Exemples</th></tr>
+    <tr>
+      <td><span class="badge">Transformation</span></td>
+      <td>Crée un nouveau RDD à partir d'un autre <em>(évaluation paresseuse)</em></td>
+      <td><code>map</code>, <code>filter</code>, <code>flatMap</code>, <code>reduceByKey</code>, <code>groupByKey</code></td>
+    </tr>
+    <tr>
+      <td><span class="badge" style="background:#e76f51;">Action</span></td>
+      <td>Déclenche le calcul et retourne un résultat</td>
+      <td><code>collect</code>, <code>count</code>, <code>reduce</code>, <code>take</code>, <code>saveAsTextFile</code></td>
+    </tr>
+  </table>
+
+  <div class="info">
+    🎯 <strong>Le pattern MapReduce</strong> :
+    <ol>
+      <li><strong>Map</strong> : transformer chaque élément (ex : <code>x → (x, 1)</code>)</li>
+      <li><strong>Shuffle</strong> : regrouper par clé</li>
+      <li><strong>Reduce</strong> : agréger les valeurs (ex : somme, max, moyenne)</li>
+    </ol>
+  </div>
+</section>
+
+<!-- =================== EXERCICE 1 =================== -->
+<section id="ex1" class="card">
+  <h2>🟢 Exercice 1 — Word Count avec PySpark</h2>
+
+  <p><strong>Objectif :</strong> compter le nombre d'occurrences de chaque mot dans un texte. C'est le « Hello World » de Spark.</p>
+
+  <div class="step">
+    <span class="step-number">1</span><strong>Créer un fichier</strong> <code>wordcount.py</code> dans votre dossier projet.
+  </div>
+
+  <div class="step">
+    <span class="step-number">2</span><strong>Importer Spark</strong> et créer le contexte :
+    <pre><code><span class="keyword">from</span> pyspark <span class="keyword">import</span> SparkContext, SparkConf
+
+conf = SparkConf().setAppName(<span class="string">"WordCount"</span>).setMaster(<span class="string">"local[*]"</span>)
+sc = SparkContext(conf=conf)
+sc.setLogLevel(<span class="string">"ERROR"</span>)</code></pre>
+    <p>📌 <code>local[*]</code> signifie : « utilise tous les cœurs CPU de ma machine ».</p>
+  </div>
+
+  <div class="step">
+    <span class="step-number">3</span><strong>Créer le texte</strong> et le mettre dans un RDD :
+    <pre><code>text = [
+    <span class="string">"Apache Spark is a fast and general engine for big data processing"</span>,
+    <span class="string">"Spark provides high level APIs in Java Scala Python and R"</span>,
+    <span class="string">"Spark is fast Spark is powerful Spark is easy to use"</span>,
+    <span class="string">"Big data processing with Spark is awesome"</span>
+]
+rdd = sc.parallelize(text)</code></pre>
+  </div>
+
+  <div class="step">
+    <span class="step-number">4</span><strong>Pipeline MapReduce</strong> :
+    <pre><code>word_counts = (rdd
+    .flatMap(<span class="keyword">lambda</span> line: line.lower().split(<span class="string">" "</span>))   <span class="comment"># découper en mots</span>
+    .map(<span class="keyword">lambda</span> word: (word, <span class="number">1</span>))                       <span class="comment"># (mot, 1)</span>
+    .reduceByKey(<span class="keyword">lambda</span> a, b: a + b))                  <span class="comment"># sommer par mot</span></code></pre>
+
+    <h4>Détail des transformations :</h4>
+    <ul>
+      <li><code>flatMap</code> : découpe chaque ligne en mots et "aplatit" en une seule liste</li>
+      <li><code>map</code> : transforme chaque mot en couple <code>(mot, 1)</code></li>
+      <li><code>reduceByKey</code> : pour chaque mot identique, additionne les <code>1</code></li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <span class="step-number">5</span><strong>Exécuter et afficher</strong> :
+    <pre><code>results = word_counts.sortBy(<span class="keyword">lambda</span> x: -x[<span class="number">1</span>]).collect()
+<span class="keyword">for</span> word, count <span class="keyword">in</span> results:
+    <span class="func">print</span>(<span class="string">f"{word:20s} : {count}"</span>)
+sc.stop()</code></pre>
+  </div>
+
+  <h3>▶️ Lancer le programme</h3>
+  <pre><code>python3 wordcount.py</code></pre>
+
+  <div class="success">
+    <h4>✅ Résultat attendu :</h4>
+    <pre style="background:#064e3b;"><code>spark                : 5
+is                   : 4
+data                 : 2
+big                  : 2
+processing           : 2
+fast                 : 2
+and                  : 2
+apache               : 1
+a                    : 1
+general              : 1
+engine               : 1
+for                  : 1
+provides             : 1
+high                 : 1
+level                : 1
+apis                 : 1
+in                   : 1
+java                 : 1
+scala                : 1
+python               : 1
+r                    : 1
+powerful             : 1
+easy                 : 1
+to                   : 1
+use                  : 1
+with                 : 1
+awesome              : 1</code></pre>
+  </div>
+</section>
+
+<!-- =================== EXERCICE 2 =================== -->
+<section id="ex2" class="card">
+  <h2>🟡 Exercice 2 — MapReduce sur les cookies</h2>
+
+  <p><strong>Contexte :</strong> on dispose d'un dataset <code>customercookies.csv</code> avec 4 colonnes :
+    <code>id</code>, <code>product</code>, <code>spent</code>, <code>rating</code>.</p>
+
+  <h3>📋 Le dataset</h3>
+  <table>
+    <tr><th>id</th><th>product</th><th>spent</th><th>rating</th></tr>
+    <tr><td>1</td><td>chocolate cookies</td><td>2</td><td>awesome</td></tr>
+    <tr><td>2</td><td>peanut butter cookies</td><td>4</td><td>satisfactory</td></tr>
+    <tr><td>3</td><td>chocolate cookies</td><td>1</td><td>awesome</td></tr>
+    <tr><td>4</td><td>chocolate cookies</td><td>1.5</td><td>awful</td></tr>
+    <tr><td>5</td><td>macadamia cookies</td><td>8</td><td>awesome</td></tr>
+    <tr><td>6</td><td>peanut butter cookies</td><td>1</td><td>awesome</td></tr>
+    <tr><td>7</td><td>macadamia cookies</td><td>4</td><td>satisfactory</td></tr>
+    <tr><td>8</td><td>chocolate cookies</td><td>2</td><td>satisfactory</td></tr>
+    <tr><td>9</td><td>peanut butter cookies</td><td>3</td><td>awesome</td></tr>
+    <tr><td>10</td><td>chocolate cookies</td><td>1</td><td>awful</td></tr>
+  </table>
+
+  <h3>(a) Maximum dépensé par un client ayant noté « awesome »</h3>
+
+  <div class="step">
+    <span class="step-number">1</span>L'expression de l'énoncé :
+    <pre><code>result = (dataset
+  .map(<span class="keyword">lambda</span> (id, product, spent, rating): (rating, spent))
+  .filter(<span class="keyword">lambda</span> (rating, spent): rating == <span class="string">'awesome'</span>)
+  .map(<span class="keyword">lambda</span> (rating, spent): (rating, spent))
+  .reduce(<span class="keyword">lambda</span> first, second: <span class="func">max</span>(first, second)))</code></pre>
+  </div>
+
+  <div class="info">
+    <h4>📝 Signification du résultat</h4>
+    <p>Le résultat de cette expression est <strong>la plus grosse somme dépensée par un client ayant noté un produit "awesome"</strong>.</p>
+    <p>Avec notre dataset : les clients « awesome » sont les ids 1, 3, 5, 6, 9 avec montants <code>2, 1, 8, 1, 3</code>. Le maximum est donc <strong>8 €</strong> (le client 5 qui a acheté des macadamia cookies).</p>
+    <p><em>« Cela permet d'identifier le client le plus dépensier parmi ceux qui sont totalement satisfaits. »</em></p>
+  </div>
+
+  <h3>(b) Calculs avancés sur les cookies</h3>
+
+  <h4>📥 Charger le CSV</h4>
+  <pre><code><span class="keyword">from</span> pyspark.sql <span class="keyword">import</span> SparkSession
+
+spark = SparkSession.builder.appName(<span class="string">"Cookies"</span>).master(<span class="string">"local[*]"</span>).getOrCreate()
+rdd = spark.read.csv(<span class="string">"customercookies.csv"</span>, header=<span class="keyword">False</span>).rdd</code></pre>
+
+  <h4>(b)(i) — Nombre de notes « awesome » par produit</h4>
+  <div class="step">
+    <pre><code>awesome_count = (rdd
+    .filter(<span class="keyword">lambda</span> r: r[<span class="number">3</span>] == <span class="string">'awesome'</span>)
+    .map(<span class="keyword">lambda</span> r: (r[<span class="number">1</span>], <span class="number">1</span>))
+    .reduceByKey(<span class="keyword">lambda</span> a, b: a + b))</code></pre>
+    <div class="success">
+      ✅ <strong>Résultat attendu :</strong>
+      <pre style="background:#064e3b;"><code>chocolate cookies     : 2
+peanut butter cookies : 2
+macadamia cookies     : 1</code></pre>
+    </div>
+  </div>
+
+  <h4>(b)(ii) — Total dépensé par produit (clients « awesome »)</h4>
+  <div class="step">
+    <pre><code>total_spent = (rdd
+    .filter(<span class="keyword">lambda</span> r: r[<span class="number">3</span>] == <span class="string">'awesome'</span>)
+    .map(<span class="keyword">lambda</span> r: (r[<span class="number">1</span>], <span class="func">float</span>(r[<span class="number">2</span>])))
+    .reduceByKey(<span class="keyword">lambda</span> a, b: a + b))</code></pre>
+    <div class="success">
+      ✅ <strong>Résultat attendu :</strong>
+      <pre style="background:#064e3b;"><code>chocolate cookies     : 3.0   (= 2 + 1)
+peanut butter cookies : 4.0   (= 1 + 3)
+macadamia cookies     : 8.0   (client 5 uniquement)</code></pre>
+    </div>
+  </div>
+
+  <h4>(b)(iii) — Moyenne dépensée par produit</h4>
+  <div class="step">
+    <p>💡 <strong>Astuce</strong> : on combine total + count avec <code>mapValues</code> puis on divise.</p>
+    <pre><code>avg_spent = (rdd
+    .filter(<span class="keyword">lambda</span> r: r[<span class="number">3</span>] == <span class="string">'awesome'</span>)
+    .map(<span class="keyword">lambda</span> r: (r[<span class="number">1</span>], (<span class="func">float</span>(r[<span class="number">2</span>]), <span class="number">1</span>)))
+    .reduceByKey(<span class="keyword">lambda</span> a, b: (a[<span class="number">0</span>]+b[<span class="number">0</span>], a[<span class="number">1</span>]+b[<span class="number">1</span>]))
+    .mapValues(<span class="keyword">lambda</span> v: v[<span class="number">0</span>] / v[<span class="number">1</span>]))</code></pre>
+    <div class="success">
+      ✅ <strong>Résultat attendu :</strong>
+      <pre style="background:#064e3b;"><code>chocolate cookies     : 1.5   (= 3 / 2  ✓ exemple de l'énoncé)
+peanut butter cookies : 2.0   (= 4 / 2)
+macadamia cookies     : 8.0   (= 8 / 1)</code></pre>
+    </div>
+  </div>
+
+  <h3>▶️ Lancer le programme</h3>
+  <pre><code>python3 mapreduce_cookies.py</code></pre>
+</section>
+
+<!-- =================== EXERCICE 3 =================== -->
+<section id="ex3" class="card">
+  <h2>🔵 Exercice 3 — k-Means avec Spark</h2>
+
+  <p><strong>Objectif :</strong> implémenter manuellement l'algorithme de clustering k-Means avec PySpark.</p>
+
+  <h3>🧠 Comment fonctionne k-Means ?</h3>
+  <ol>
+    <li>📍 Choisir <strong>k</strong> centroïdes initiaux (au hasard parmi les points)</li>
+    <li>🎯 <strong>Affecter chaque point</strong> au centroïde le plus proche → ça crée k clusters</li>
+    <li>🔄 <strong>Recalculer chaque centroïde</strong> = moyenne des points de son cluster</li>
+    <li>🔁 Répéter 2-3 jusqu'à <strong>convergence</strong> (les centroïdes ne bougent plus)</li>
+  </ol>
+
+  <div class="info">
+    🎯 <strong>Les 2 fonctions à implémenter (TODO de l'énoncé) :</strong>
+    <ul>
+      <li><code>assign_to_centroid(point, centroids)</code> → retourne <code>(index_centroide, point)</code></li>
+      <li><code>calculate_new_centroid(points)</code> → retourne le barycentre des points</li>
+    </ul>
+  </div>
+
+  <h3>Étape 1 : générer le dataset blobs.csv</h3>
+  <p>Utiliser <code>sklearn.datasets.make_blobs</code> :</p>
+  <pre><code><span class="keyword">from</span> sklearn.datasets <span class="keyword">import</span> make_blobs
+<span class="keyword">import</span> numpy <span class="keyword">as</span> np
+
+X, y = make_blobs(n_samples=<span class="number">300</span>, centers=<span class="number">3</span>, n_features=<span class="number">2</span>,
+                  cluster_std=<span class="number">1.0</span>, random_state=<span class="number">42</span>)
+np.savetxt(<span class="string">"blobs.csv"</span>, X, delimiter=<span class="string">","</span>, fmt=<span class="string">"%.6f"</span>)</code></pre>
+
+  <p>Cela crée 300 points organisés en 3 « blobs » (groupes) qu'on va devoir retrouver.</p>
+
+  <h3>Étape 2 : implémenter <code>assign_to_centroid</code></h3>
+  <pre><code><span class="keyword">def</span> <span class="func">assign_to_centroid</span>(point, centroids):
+    <span class="comment"># Distance euclidienne entre le point et chaque centroïde</span>
+    distances = [np.linalg.norm(point - c) <span class="keyword">for</span> c <span class="keyword">in</span> centroids]
+    <span class="comment"># Index du centroïde le plus proche</span>
+    closest_index = <span class="func">int</span>(np.argmin(distances))
+    <span class="keyword">return</span> (closest_index, point)</code></pre>
+
+  <h3>Étape 3 : implémenter <code>calculate_new_centroid</code></h3>
+  <pre><code><span class="keyword">def</span> <span class="func">calculate_new_centroid</span>(points):
+    points_array = np.array(<span class="func">list</span>(points))
+    <span class="keyword">return</span> points_array.mean(axis=<span class="number">0</span>)   <span class="comment"># moyenne des coordonnées</span></code></pre>
+
+  <h3>Étape 4 : la boucle principale</h3>
+  <pre><code><span class="keyword">def</span> <span class="func">kmeans</span>(rdd_points, k=<span class="number">3</span>, max_iter=<span class="number">20</span>):
+    centroids = rdd_points.takeSample(<span class="keyword">False</span>, k, seed=<span class="number">42</span>)
+
+    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="func">range</span>(max_iter):
+        clusters = rdd_points.map(<span class="keyword">lambda</span> p: assign_to_centroid(p, centroids))
+        new_centroids = (clusters
+                         .groupByKey()
+                         .mapValues(calculate_new_centroid)
+                         .collect())
+        <span class="comment"># ... vérifier convergence + mise à jour ...</span>
+    <span class="keyword">return</span> centroids</code></pre>
+
+  <h3>▶️ Lancer le programme</h3>
+  <pre><code><span class="comment"># 1. Générer le dataset</span>
+python3 generate_blobs.py
+
+<span class="comment"># 2. Lancer k-Means</span>
+python3 kMeans_template.py</code></pre>
+
+  <div class="success">
+    <h4>✅ Résultat attendu (exemple) :</h4>
+    <pre style="background:#064e3b;"><code>Nombre de points : 300
+Centroïdes initiaux :
+[[7.4 2.1] [6.4 8.2] [2.1 1.9]]
+
+Itération  1 | déplacement total = 1.234567
+Itération  2 | déplacement total = 0.045231
+Itération  3 | déplacement total = 0.000812
+Itération  4 | déplacement total = 0.000005
+
+>>> Convergence atteinte à l'itération 4
+
+========== CENTROÏDES FINAUX ==========
+  Cluster 0 : [8.0 3.0]
+  Cluster 1 : [5.0 8.0]
+  Cluster 2 : [2.0 2.0]
+========================================
+
+Répartition des points par cluster :
+  Cluster 0 : 100 points
+  Cluster 1 : 100 points
+  Cluster 2 : 100 points</code></pre>
+  </div>
+
+  <div class="warning">
+    ⚠️ <strong>Attention :</strong> les valeurs exactes peuvent varier selon l'initialisation aléatoire.
+    L'important est que les 3 clusters soient bien séparés avec ~100 points chacun.
+  </div>
+</section>
+
+<!-- =================== RENDU =================== -->
+<section id="rendu" class="card">
+  <h2>📦 Préparation du rendu</h2>
+
+  <p>D'après les instructions :</p>
+  <blockquote style="border-left:4px solid #e25822; padding-left:15px; color:#475569;">
+    « Lorsque vous avez terminé votre projet, récupérez tous les fichiers et placez-les dans un dossier
+    nommé <strong>"Spark Project_firstname lastname"</strong>. Compressez-le en .zip ou .rar
+    et envoyez-le à <strong>i.sassi@uae.ac.ma</strong> avant le <strong>15 mai 2026</strong>. »
+  </blockquote>
+
+  <h3>📁 Structure du dossier final</h3>
+  <pre><code>Spark Project_Douzi Hazem/
+├── wordcount.py              <span class="comment"># Exercice 1</span>
+├── customercookies.csv       <span class="comment"># Données Exercice 2</span>
+├── mapreduce_cookies.py      <span class="comment"># Exercice 2</span>
+├── kMeans_template.py        <span class="comment"># Exercice 3</span>
+├── generate_blobs.py         <span class="comment"># Génère blobs.csv</span>
+├── blobs.csv                 <span class="comment"># Données Exercice 3</span>
+├── TP9_Spark_Guide.html      <span class="comment"># Ce guide</span>
+└── README.md                 <span class="comment"># Documentation</span></code></pre>
+
+  <h3>🗜 Compresser en .zip</h3>
+  <pre><code><span class="comment"># Linux / Mac</span>
+zip -r <span class="string">"Spark Project_Douzi Hazem.zip"</span> <span class="string">"Spark Project_Douzi Hazem/"</span>
+
+<span class="comment"># Windows : clic droit → Envoyer vers → Dossier compressé</span></code></pre>
+
+  <h3>📧 Envoi par mail</h3>
+  <ul>
+    <li><strong>Destinataire :</strong> i.sassi@uae.ac.ma</li>
+    <li><strong>Objet :</strong> [TP9 Spark] Douzi Hazem</li>
+    <li><strong>Pièce jointe :</strong> Spark Project_Douzi Hazem.zip</li>
+    <li><strong>Date limite :</strong> avant le 15 mai 2026 ⏰</li>
+  </ul>
+</section>
+
+<footer>
+  <p>📘 Guide pédagogique généré pour le TP N°9 — Fondamentaux de Big Data — ENSA Tétouan</p>
+  <p>👨‍🎓 Douzi Hazem — 2025/2026</p>
+</footer>
+
+</body>
+</html>
