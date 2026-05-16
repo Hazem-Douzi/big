@@ -29,15 +29,17 @@ Le simulateur peut tourner :
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import random
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from . import config
-from .kafka_client import BaseKafkaClient, get_client
+from .kafka_client import BaseKafkaClient, get_client, to_json_str
 from .patterns import (
     MeterReading,
     aggregate_concentrator,
@@ -104,6 +106,13 @@ class TetouanSimulator:
         # buckets de 1 min). Plus le nombre est eleve, plus l'etalement est
         # fin (mais plus de ticks a executer).
         num_buckets: int = 15,
+        # fichier optionnel qui recoit l'historique des fenetres 15 min :
+        # une ligne JSON par (quartier x fenetre), idealement consomme par
+        # le dashboard pour afficher les tendances.
+        history_file: Optional[str] = None,
+        # nombre maximal de fenetres conservees dans le fichier d'historique
+        # (rolling window). 0 = illimite.
+        history_max_windows: int = 96,  # 96 fenetres de 15 min = 24h
     ):
         self.client = client if client is not None else get_client()
         self.rng = random.Random(seed)
@@ -113,6 +122,14 @@ class TetouanSimulator:
         )
         self.num_buckets = num_buckets
         self.cycle_count = 0
+
+        # --- fichier d'historique des fenetres (pour le dashboard) ---------
+        self._history_path: Optional[Path] = None
+        self._history_max_windows = history_max_windows
+        if history_file:
+            self._history_path = Path(history_file)
+            self._history_path.parent.mkdir(parents=True, exist_ok=True)
+            logger.info("Historique des fenetres ecrit dans : %s", self._history_path)
 
         # construction de la topologie
         logger.info("Construction de la topologie Tetouan...")
@@ -215,17 +232,22 @@ class TetouanSimulator:
 
     # ============================================================== phase 2
     def _phase2_distributors_to_concentrators(
-        self, readings_by_distributor: Dict[str, List[MeterReading]]
+        self,
+        readings_by_distributor: Dict[str, List[MeterReading]],
+        window_start: datetime,
+        window_end: datetime,
     ) -> Dict[str, List[dict]]:
         """
         PHASE 2 : distributeurs -> concentrateurs (rafale 1 min).
 
-        Chaque distributeur agrege ses compteurs et publie un message.
-        Renvoie { concentrator_id : [aggregated_dict, ...] }.
+        Chaque distributeur agrege ses compteurs sur la fenetre 15 min
+        [window_start, window_end] et publie un message.
         """
+        ws = window_start.isoformat()
+        we = window_end.isoformat()
         logger.info(
-            "[PHASE 2] %s -> distributeurs agregent et envoient au concentrateur",
-            self.simulated_clock.isoformat(),
+            "[PHASE 2] %s -> distributeurs agregent fenetre [%s -> %s]",
+            self.simulated_clock.isoformat(), ws, we,
         )
 
         aggregations_by_concentrator: Dict[str, List[dict]] = defaultdict(list)
@@ -237,7 +259,7 @@ class TetouanSimulator:
             readings = readings_by_distributor.get(distributor_id, [])
             if not readings:
                 continue  # pas de mesures dans ce cycle
-            agg = aggregate_distributor(readings)
+            agg = aggregate_distributor(readings, window_start=ws, window_end=we)
             self.client.send(
                 config.TOPIC_DISTRIBUTOR_AGG,
                 agg,
@@ -259,22 +281,28 @@ class TetouanSimulator:
 
     # ============================================================== phase 3
     def _phase3_concentrators_to_center(
-        self, aggregations_by_concentrator: Dict[str, List[dict]]
+        self,
+        aggregations_by_concentrator: Dict[str, List[dict]],
+        window_start: datetime,
+        window_end: datetime,
     ) -> List[dict]:
         """
         PHASE 3 : concentrateurs -> centre de traitement (rafale 1 min).
 
         Chaque concentrateur agrege les messages de ses distributeurs et
-        publie un message au niveau du quartier.
+        publie un message au niveau du quartier, conservant les bornes de
+        fenetre 15 min [window_start, window_end].
         """
+        ws = window_start.isoformat()
+        we = window_end.isoformat()
         logger.info(
-            "[PHASE 3] %s -> concentrateurs agregent et envoient au centre",
-            self.simulated_clock.isoformat(),
+            "[PHASE 3] %s -> concentrateurs agregent fenetre [%s -> %s]",
+            self.simulated_clock.isoformat(), ws, we,
         )
 
         district_aggs: List[dict] = []
         for concentrator_id, dist_aggs in aggregations_by_concentrator.items():
-            agg = aggregate_concentrator(dist_aggs)
+            agg = aggregate_concentrator(dist_aggs, window_start=ws, window_end=we)
             self.client.send(
                 config.TOPIC_CONCENTRATOR_AGG,
                 agg,
@@ -294,11 +322,19 @@ class TetouanSimulator:
 
     # ============================================================== phase 4
     def _phase4_idle_and_summary(
-        self, district_aggs: List[dict], cycle_start: datetime
+        self,
+        district_aggs: List[dict],
+        cycle_start: datetime,
+        window_start: datetime,
+        window_end: datetime,
     ) -> None:
         """
-        PHASE 4 : idle (13 min) + publication d'un recap global du cycle.
+        PHASE 4 : idle (13 min) + publication d'un recap global du cycle
+        et ecriture de l'historique des fenetres pour le dashboard.
         """
+        ws = window_start.isoformat()
+        we = window_end.isoformat()
+
         # construire un message recap du cycle pour le centre
         total_energy = sum(a.get("total_energy_kwh", 0) for a in district_aggs)
         total_meters = sum(a.get("total_meters", 0) for a in district_aggs)
@@ -308,6 +344,11 @@ class TetouanSimulator:
             "cycle_id": self.cycle_count,
             "cycle_start": cycle_start.isoformat(),
             "cycle_end": self.simulated_clock.isoformat(),
+            # ----- fenetrage 15 min ------------------------------------
+            "window_start": ws,
+            "window_end":   we,
+            "window_duration_min": 15,
+            # ----- agregations globales --------------------------------
             "districts_reported": len(district_aggs),
             "total_meters": total_meters,
             "total_energy_kwh": round(total_energy, 4),
@@ -322,9 +363,14 @@ class TetouanSimulator:
         )
         self.client.flush()
 
+        # ecrire l'historique des fenetres pour le dashboard
+        self._write_window_history(district_aggs, cycle_recap)
+
         logger.info(
-            "[PHASE 4] %s -> recap cycle publie (energie=%.2f kWh, anomalies=%d) | idle %d min",
+            "[PHASE 4] %s -> recap fenetre [%s -> %s] publie "
+            "(energie=%.2f kWh, anomalies=%d) | idle %d min",
             self.simulated_clock.isoformat(),
+            ws, we,
             total_energy,
             total_anomalies,
             config.PHASE_IDLE_MIN,
@@ -333,23 +379,117 @@ class TetouanSimulator:
         self._sleep(config.PHASE_IDLE_MIN)
         self._advance_clock(config.PHASE_IDLE_MIN)
 
+    # ============================================================== history
+    def _write_window_history(
+        self, district_aggs: List[dict], cycle_recap: dict
+    ) -> None:
+        """
+        Ecrit dans le fichier d'historique :
+          - 1 ligne JSON par quartier (kind=district) avec les agregations
+            de la fenetre 15 min courante
+          - 1 ligne JSON globale (kind=cycle) avec le recap du cycle
+
+        Si self._history_max_windows > 0, on tronque le fichier pour ne
+        garder que les N dernieres fenetres (rolling window) — pratique
+        pour ne pas faire grossir indefiniment le fichier en mode
+        --cycles 0 (boucle infinie).
+        """
+        if self._history_path is None:
+            return
+
+        # 1) appendre les nouvelles lignes
+        with self._history_path.open("a", encoding="utf-8") as f:
+            for d in district_aggs:
+                f.write(to_json_str({"kind": "district", **d}) + "\n")
+            f.write(to_json_str({"kind": "cycle", **{
+                k: v for k, v in cycle_recap.items() if k != "districts"
+            }}) + "\n")
+
+        # 2) tronquer le fichier si on depasse la limite
+        if self._history_max_windows > 0:
+            self._truncate_history_file()
+
+    def _truncate_history_file(self) -> None:
+        """
+        Garde uniquement les `history_max_windows` dernieres fenetres (cycles)
+        dans le fichier d'historique. Decoupe les lignes en blocs separes
+        par les marqueurs kind=cycle.
+        """
+        if self._history_path is None or not self._history_path.exists():
+            return
+
+        try:
+            lines = self._history_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return
+
+        # decouper en blocs (1 bloc = toutes les lignes jusqu'au prochain "cycle")
+        blocks: List[List[str]] = []
+        current: List[str] = []
+        for ln in lines:
+            current.append(ln)
+            try:
+                obj = json.loads(ln)
+                if obj.get("kind") == "cycle":
+                    blocks.append(current)
+                    current = []
+            except (json.JSONDecodeError, ValueError):
+                continue
+        if current:
+            blocks.append(current)
+
+        if len(blocks) <= self._history_max_windows:
+            return
+
+        # garder les N dernieres fenetres
+        kept = blocks[-self._history_max_windows:]
+        self._history_path.write_text(
+            "\n".join(ln for block in kept for ln in block) + "\n",
+            encoding="utf-8",
+        )
+
     # ================================================================ cycle
     def run_cycle(self) -> None:
-        """Execute un cycle complet de 30 minutes simulees."""
+        """
+        Execute un cycle complet de 30 minutes simulees.
+
+        La fenetre 15 min de Spark Structured Streaming est defini par :
+            window_start = cycle_start
+            window_end   = cycle_start + 15 minutes
+        ce qui correspond exactement a la phase 1 de collecte. Toutes les
+        agregations (distributeur, concentrateur, recap centre) portent
+        ces bornes pour materialiser le fenetrage.
+        """
         self.cycle_count += 1
         cycle_start = self.simulated_clock
-        logger.info("================ CYCLE %d demarre a %s ================",
-                    self.cycle_count, cycle_start.isoformat())
+        # fenetre 15 min = phase 1 (collecte des compteurs)
+        window_start = cycle_start
+        window_end = cycle_start + timedelta(
+            minutes=config.PHASE_METERS_TO_DISTRIBUTORS_MIN
+        )
+
+        logger.info(
+            "================ CYCLE %d demarre — fenetre 15 min : [%s -> %s] ================",
+            self.cycle_count,
+            window_start.isoformat(),
+            window_end.isoformat(),
+        )
 
         readings_by_distributor = self._phase1_meters_to_distributors()
         aggs_by_concentrator = self._phase2_distributors_to_concentrators(
-            readings_by_distributor
+            readings_by_distributor, window_start, window_end,
         )
-        district_aggs = self._phase3_concentrators_to_center(aggs_by_concentrator)
-        self._phase4_idle_and_summary(district_aggs, cycle_start)
+        district_aggs = self._phase3_concentrators_to_center(
+            aggs_by_concentrator, window_start, window_end,
+        )
+        self._phase4_idle_and_summary(
+            district_aggs, cycle_start, window_start, window_end,
+        )
 
-        logger.info("================ CYCLE %d termine a %s ================",
-                    self.cycle_count, self.simulated_clock.isoformat())
+        logger.info(
+            "================ CYCLE %d termine a %s ================",
+            self.cycle_count, self.simulated_clock.isoformat(),
+        )
 
     def run(self, num_cycles: Optional[int] = None) -> None:
         """
